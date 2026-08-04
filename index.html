@@ -169,6 +169,10 @@
   .cat-gatos{background:rgba(255,193,69,0.14);color:var(--hardhat);}
   .cat-granja{background:rgba(95,168,93,0.14);color:var(--leaf);}
   .cat-accesorios{background:rgba(91,141,239,0.14);color:var(--sky);}
+  .cat-ferreteria{background:rgba(117,122,128,0.18);color:#4B5157;}
+  .cat-lubricantes{background:rgba(153,80,20,0.16);color:#7A4310;}
+  .cat-limpieza{background:rgba(59,175,197,0.16);color:#1E7A8C;}
+  .cat-almacen{background:rgba(184,134,11,0.16);color:#8A6508;}
   .icon-btn{background:none;border:none;color:var(--cement-dim);cursor:pointer;font-size:14px;padding:4px 6px;border-radius:5px;}
   .icon-btn:hover{color:var(--safety);background:rgba(255,107,26,0.1);}
   .prod-name-cell{font-weight:600;}
@@ -464,6 +468,10 @@
           <option value="gatos">Gatos</option>
           <option value="granja">Aves / Granja</option>
           <option value="accesorios">Accesorios</option>
+          <option value="ferreteria">Ferretería</option>
+          <option value="lubricantes">Lubricantes</option>
+          <option value="limpieza">Limpieza</option>
+          <option value="almacen">Almacén</option>
         </select>
       </div>
       <div class="field"><label>Código de barras</label><input type="text" id="prod-codigo" placeholder="7791234567890"></div>
@@ -479,28 +487,18 @@
         <label><input type="checkbox" id="prod-vende-bolsa" checked onchange="toggleCamposProducto()"> Vende por bolsa</label>
         <label><input type="checkbox" id="prod-vende-granel" checked onchange="toggleCamposProducto()"> Vende a granel (kg)</label>
       </div>
-      <div class="field" id="campo-peso-bolsa"><label>Peso por bolsa (kg)</label><input type="number" id="prod-peso-bolsa" placeholder="15"></div>
-      <div class="field-row" id="campo-costo-bolsa">
-        <div class="field"><label>Costo por bolsa ($)</label><input type="number" id="prod-costo-bolsa" placeholder="30000" oninput="recalcularPrecio('bolsa')"></div>
-        <div class="field"><label>Margen (%)</label><input type="number" id="prod-margen-bolsa" placeholder="30" oninput="recalcularPrecio('bolsa')"></div>
+      <div class="field-row">
+        <div class="field" id="campo-peso-bolsa"><label>Peso por bolsa (kg)</label><input type="number" id="prod-peso-bolsa" placeholder="15"></div>
+        <div class="field" id="campo-precio-bolsa"><label>Precio por bolsa ($)</label><input type="number" id="prod-precio-bolsa" placeholder="45000"></div>
       </div>
-      <div class="precio-preview" id="preview-bolsa">Precio de venta: $0</div>
-      <div class="field-row" id="campo-costo-granel">
-        <div class="field"><label>Costo por kg suelto ($)</label><input type="number" id="prod-costo-granel" placeholder="2200" oninput="recalcularPrecio('granel')"></div>
-        <div class="field"><label>Margen (%)</label><input type="number" id="prod-margen-granel" placeholder="35" oninput="recalcularPrecio('granel')"></div>
-      </div>
-      <div class="precio-preview" id="preview-granel">Precio de venta: $0/kg</div>
+      <div class="field" id="campo-precio-granel"><label>Precio por kg suelto ($)</label><input type="number" id="prod-precio-granel" placeholder="3200"></div>
       <div class="field-row">
         <div class="field"><label>Stock actual (kg)</label><input type="number" id="prod-stock" placeholder="450"></div>
         <div class="field"><label>Stock mínimo (kg)</label><input type="number" id="prod-stock-min" placeholder="80"></div>
       </div>
     </div>
     <div id="bloque-unidad" style="display:none;">
-      <div class="field-row">
-        <div class="field"><label>Costo unitario ($)</label><input type="number" id="prod-costo-unidad" placeholder="6000" oninput="recalcularPrecio('unidad')"></div>
-        <div class="field"><label>Margen (%)</label><input type="number" id="prod-margen-unidad" placeholder="40" oninput="recalcularPrecio('unidad')"></div>
-      </div>
-      <div class="precio-preview" id="preview-unidad">Precio de venta: $0</div>
+      <div class="field"><label>Precio unitario ($)</label><input type="number" id="prod-precio-unidad" placeholder="8500"></div>
       <div class="field-row">
         <div class="field"><label>Stock actual (unidades)</label><input type="number" id="prod-stock-un" placeholder="30"></div>
         <div class="field"><label>Stock mínimo (unidades)</label><input type="number" id="prod-stock-min-un" placeholder="5"></div>
@@ -762,7 +760,7 @@ function renderTodo(){
 // HELPERS
 // ============================================================
 function money(n){ return '$' + Number(n||0).toLocaleString('es-AR'); }
-const CAT_LABEL = {perros:'Perros', gatos:'Gatos', granja:'Aves / Granja', accesorios:'Accesorios'};
+const CAT_LABEL = {perros:'Perros', gatos:'Gatos', granja:'Aves / Granja', accesorios:'Accesorios', ferreteria:'Ferretería', lubricantes:'Lubricantes', limpieza:'Limpieza', almacen:'Almacén'};
 
 function nivelStock(prod){
   if(prod.tipoVenta==='unidad'){
@@ -831,34 +829,11 @@ function toggleCamposProducto(){
   const bolsa = document.getElementById('prod-vende-bolsa').checked;
   const granel = document.getElementById('prod-vende-granel').checked;
   document.getElementById('campo-peso-bolsa').style.display = bolsa ? 'block' : 'none';
-  document.getElementById('campo-costo-bolsa').style.display = bolsa ? 'grid' : 'none';
-  document.getElementById('preview-bolsa').style.display = bolsa ? 'block' : 'none';
-  document.getElementById('campo-costo-granel').style.display = granel ? 'grid' : 'none';
-  document.getElementById('preview-granel').style.display = granel ? 'block' : 'none';
+  document.getElementById('campo-precio-bolsa').style.display = bolsa ? 'block' : 'none';
+  document.getElementById('campo-precio-granel').style.display = granel ? 'block' : 'none';
 }
 
-// Costo + % de ganancia → precio de venta. El cliente carga lo que él
-// quiera en cada campo; acá solo hacemos la cuenta y la mostramos.
-function calcularPrecio(costo, margen){
-  return Math.round(costo * (1 + (margen||0)/100));
-}
-function recalcularPrecio(tipo){
-  if(tipo==='bolsa'){
-    const costo = Number(document.getElementById('prod-costo-bolsa').value)||0;
-    const margen = Number(document.getElementById('prod-margen-bolsa').value)||0;
-    document.getElementById('preview-bolsa').textContent = 'Precio de venta: ' + money(calcularPrecio(costo,margen));
-  } else if(tipo==='granel'){
-    const costo = Number(document.getElementById('prod-costo-granel').value)||0;
-    const margen = Number(document.getElementById('prod-margen-granel').value)||0;
-    document.getElementById('preview-granel').textContent = 'Precio de venta: ' + money(calcularPrecio(costo,margen)) + '/kg';
-  } else if(tipo==='unidad'){
-    const costo = Number(document.getElementById('prod-costo-unidad').value)||0;
-    const margen = Number(document.getElementById('prod-margen-unidad').value)||0;
-    document.getElementById('preview-unidad').textContent = 'Precio de venta: ' + money(calcularPrecio(costo,margen));
-  }
-}
-
-async function abrirModalProducto(id){
+function abrirModalProducto(id){
   document.getElementById('modal-producto-titulo').textContent = id ? 'Editar producto' : 'Nuevo producto';
   document.getElementById('prod-id').value = id || '';
   if(id){
@@ -867,41 +842,27 @@ async function abrirModalProducto(id){
     document.getElementById('prod-categoria').value = pr.categoria;
     document.getElementById('prod-codigo').value = pr.codigoBarras || '';
     setTipoVenta(pr.tipoVenta);
-
-    // El costo/margen vive aparte (solo admin puede leerlo)
-    let costos = {};
-    try{
-      const costosDoc = await firestore.collection('productos').doc(id).collection('costos').doc('datos').get();
-      costos = costosDoc.exists ? costosDoc.data() : {};
-    }catch(err){ console.error('No se pudo leer el costo (¿sos admin?):', err); }
-
     if(pr.tipoVenta==='peso'){
       document.getElementById('prod-vende-bolsa').checked = pr.vendeBolsa;
       document.getElementById('prod-vende-granel').checked = pr.vendeGranel;
       document.getElementById('prod-peso-bolsa').value = pr.pesoBolsaKg || '';
-      document.getElementById('prod-costo-bolsa').value = costos.costoBolsa || '';
-      document.getElementById('prod-margen-bolsa').value = costos.margenBolsa || '';
-      document.getElementById('prod-costo-granel').value = costos.costoGranelKg || '';
-      document.getElementById('prod-margen-granel').value = costos.margenGranelKg || '';
+      document.getElementById('prod-precio-bolsa').value = pr.precioBolsa || '';
+      document.getElementById('prod-precio-granel').value = pr.precioGranelKg || '';
       document.getElementById('prod-stock').value = pr.stockKg;
       document.getElementById('prod-stock-min').value = pr.stockMinKg;
       toggleCamposProducto();
-      recalcularPrecio('bolsa'); recalcularPrecio('granel');
     } else {
-      document.getElementById('prod-costo-unidad').value = costos.costoUnidad || '';
-      document.getElementById('prod-margen-unidad').value = costos.margenUnidad || '';
+      document.getElementById('prod-precio-unidad').value = pr.precioUnidad || '';
       document.getElementById('prod-stock-un').value = pr.stockUnidades;
       document.getElementById('prod-stock-min-un').value = pr.stockMinUnidades;
-      recalcularPrecio('unidad');
     }
   } else {
-    ['prod-nombre','prod-codigo','prod-peso-bolsa','prod-costo-bolsa','prod-margen-bolsa','prod-costo-granel','prod-margen-granel','prod-stock','prod-stock-min','prod-costo-unidad','prod-margen-unidad','prod-stock-un','prod-stock-min-un'].forEach(fid=>document.getElementById(fid).value='');
+    ['prod-nombre','prod-codigo','prod-peso-bolsa','prod-precio-bolsa','prod-precio-granel','prod-stock','prod-stock-min','prod-precio-unidad','prod-stock-un','prod-stock-min-un'].forEach(fid=>document.getElementById(fid).value='');
     document.getElementById('prod-categoria').value = 'perros';
     document.getElementById('prod-vende-bolsa').checked = true;
     document.getElementById('prod-vende-granel').checked = true;
     setTipoVenta('peso');
     toggleCamposProducto();
-    recalcularPrecio('bolsa'); recalcularPrecio('granel'); recalcularPrecio('unidad');
   }
   document.getElementById('modal-producto').classList.add('active');
 }
@@ -917,44 +878,30 @@ async function guardarProducto(){
     codigoBarras: document.getElementById('prod-codigo').value.trim(),
     tipoVenta
   };
-  let costos = {};
   if(tipoVenta==='peso'){
-    const costoBolsa = Number(document.getElementById('prod-costo-bolsa').value) || 0;
-    const margenBolsa = Number(document.getElementById('prod-margen-bolsa').value) || 0;
-    const costoGranelKg = Number(document.getElementById('prod-costo-granel').value) || 0;
-    const margenGranelKg = Number(document.getElementById('prod-margen-granel').value) || 0;
     Object.assign(data, {
       vendeBolsa: document.getElementById('prod-vende-bolsa').checked,
       vendeGranel: document.getElementById('prod-vende-granel').checked,
       pesoBolsaKg: Number(document.getElementById('prod-peso-bolsa').value) || 0,
-      precioBolsa: calcularPrecio(costoBolsa, margenBolsa),
-      precioGranelKg: calcularPrecio(costoGranelKg, margenGranelKg),
+      precioBolsa: Number(document.getElementById('prod-precio-bolsa').value) || 0,
+      precioGranelKg: Number(document.getElementById('prod-precio-granel').value) || 0,
       stockKg: Number(document.getElementById('prod-stock').value) || 0,
       stockMinKg: Number(document.getElementById('prod-stock-min').value) || 0
     });
-    costos = { costoBolsa, margenBolsa, costoGranelKg, margenGranelKg };
   } else {
-    const costoUnidad = Number(document.getElementById('prod-costo-unidad').value) || 0;
-    const margenUnidad = Number(document.getElementById('prod-margen-unidad').value) || 0;
     Object.assign(data, {
-      precioUnidad: calcularPrecio(costoUnidad, margenUnidad),
+      precioUnidad: Number(document.getElementById('prod-precio-unidad').value) || 0,
       stockUnidades: Number(document.getElementById('prod-stock-un').value) || 0,
       stockMinUnidades: Number(document.getElementById('prod-stock-min-un').value) || 0
     });
-    costos = { costoUnidad, margenUnidad };
   }
   try{
-    let productoId = id;
     if(id){
       // merge:true para no pisar campos si el doc ya existía con otra forma
       await firestore.collection('productos').doc(id).set(data, {merge:true});
     } else {
-      const ref = await firestore.collection('productos').add(data);
-      productoId = ref.id;
+      await firestore.collection('productos').add(data);
     }
-    // El costo/margen queda en su propia subcolección — la única que
-    // las Security Rules restringen exclusivamente al admin.
-    await firestore.collection('productos').doc(productoId).collection('costos').doc('datos').set(costos, {merge:true});
     cerrarModal('modal-producto');
     // No hace falta llamar a renderStock() acá: el listener de
     // iniciarListeners() se entera solo del cambio y redibuja.
@@ -973,7 +920,7 @@ async function eliminarProducto(id){
 }
 
 function renderCatTabs(contId, filtroActual, onClickFn){
-  const cats = ['todas','perros','gatos','granja','accesorios'];
+  const cats = ['todas','perros','gatos','granja','accesorios','ferreteria','lubricantes','limpieza','almacen'];
   const cont = document.getElementById(contId);
   cont.innerHTML = cats.map(c=>`<button class="filter-tab ${filtroActual===c?'active':''}" onclick="${onClickFn}('${c}')">${c==='todas'?'Todas':CAT_LABEL[c]}</button>`).join('');
 }
