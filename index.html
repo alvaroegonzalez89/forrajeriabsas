@@ -520,6 +520,7 @@
     <h3>Nuevo proveedor</h3>
     <div class="field"><label>Nombre / razón social</label><input type="text" id="prov-nombre" placeholder="Ej: Distribuidora Royal Canin Cuyo"></div>
     <div class="field"><label>CUIT</label><input type="text" id="prov-cuit" placeholder="30-12345678-9"></div>
+    <div class="field"><label>Saldo inicial ($) — lo que ya le debés hoy</label><input type="number" id="prov-saldo-inicial" placeholder="0"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="cerrarModal('modal-proveedor')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarProveedor()">Guardar</button>
@@ -1318,17 +1319,31 @@ function emitirFactura(){
 function abrirModalProveedor(){
   document.getElementById('prov-nombre').value = '';
   document.getElementById('prov-cuit').value = '';
+  document.getElementById('prov-saldo-inicial').value = '';
   document.getElementById('modal-proveedor').classList.add('active');
 }
 async function guardarProveedor(){
   const nombre = document.getElementById('prov-nombre').value.trim();
   if(!nombre){ alert('Poné un nombre'); return; }
+  const saldoInicial = Number(document.getElementById('prov-saldo-inicial').value) || 0;
   try{
-    await firestore.collection('proveedores').add({
+    const ref = await firestore.collection('proveedores').add({
       nombre,
       cuit: document.getElementById('prov-cuit').value.trim(),
-      saldo: 0
+      saldo: saldoInicial
     });
+    // Si arranca con deuda, queda un primer movimiento en la cuenta
+    // corriente para que se entienda de dónde salió ese saldo (y no
+    // aparezca de la nada al abrir el historial del proveedor).
+    if(saldoInicial > 0){
+      await ref.collection('movimientos').add({
+        fecha: new Date().toISOString(),
+        tipo: 'compra',
+        comprobante: 'Saldo inicial al dar de alta el proveedor',
+        monto: saldoInicial,
+        saldoResultante: saldoInicial
+      });
+    }
     cerrarModal('modal-proveedor');
   }catch(err){
     alert('Error al guardar el proveedor: ' + err.message);
