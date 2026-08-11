@@ -329,6 +329,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="14" height="10" rx="1.5"/><path d="M15 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg>
       Proveedores
     </div>
+    <div class="nav-item" data-page="contable" onclick="irAPagina('contable')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+      Resumen Contable
+    </div>
     <div class="sidebar-footer">
       <button class="logout-btn" onclick="hacerLogout()">Cerrar sesión</button>
     </div>
@@ -449,6 +453,33 @@
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Comprobante</th><th>Monto</th><th>Saldo resultante</th></tr></thead>
           <tbody id="tabla-movimientos"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- RESUMEN CONTABLE -->
+    <div class="page" id="page-contable">
+      <div class="page-header">
+        <div>
+          <h2>Resumen Contable</h2>
+          <div class="sub">Para mandarle al contador — se descarga en un Excel con varias hojas</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="field" style="max-width:220px;">
+          <label>Mes a exportar</label>
+          <input type="month" id="contable-mes">
+        </div>
+        <p style="font-size:12.5px;color:var(--cement-dim);line-height:1.6;margin:6px 0 18px;">
+          El Excel va a incluir 4 hojas: <b>Resumen</b> (totales generales), <b>Ventas del mes</b> (cada comprobante emitido),
+          <b>Movimientos de proveedores</b> (compras y pagos del mes en cada cuenta corriente) y <b>Stock valorizado</b>
+          (el inventario actual a precio de venta — esto último siempre refleja el stock de HOY, no el de fin de mes,
+          porque el sistema no guarda una foto histórica del stock día por día).
+        </p>
+        <button class="btn btn-primary" id="btn-generar-excel" onclick="generarResumenContable()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+          Descargar Excel
+        </button>
+        <div id="contable-status" style="margin-top:12px;font-size:12.5px;color:var(--cement-dim);"></div>
       </div>
     </div>
 
@@ -596,6 +627,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -747,6 +779,13 @@ function irAPagina(nombre){
   document.querySelector(`.nav-item[data-page="${nombre}"]`).classList.add('active');
   if(nombre==='caja'){ renderCaja(); setTimeout(()=>document.getElementById('scanner-input').focus(),50); }
   if(nombre==='proveedores') renderProveedores();
+  if(nombre==='contable'){
+    const mesInput = document.getElementById('contable-mes');
+    if(!mesInput.value){
+      const hoy = new Date();
+      mesInput.value = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0');
+    }
+  }
 }
 
 function renderTodo(){
@@ -1236,6 +1275,131 @@ function abrirResumen(){
     </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--cement-dim);">Todavía no hay ventas registradas este mes en la demo</td></tr>';
 
   document.getElementById('modal-resumen').classList.add('active');
+}
+
+// ============================================================
+// RESUMEN CONTABLE — arma un Excel de 4 hojas (Resumen, Ventas del mes,
+// Movimientos de proveedores, Stock valorizado) para mandarle al contador.
+// ============================================================
+function precioPorKg(pr){
+  if(pr.vendeGranel) return pr.precioGranelKg || 0;
+  if(pr.vendeBolsa && pr.pesoBolsaKg) return Math.round((pr.precioBolsa||0) / pr.pesoBolsaKg);
+  return 0;
+}
+
+async function generarResumenContable(){
+  const mesInput = document.getElementById('contable-mes').value; // "2026-08"
+  if(!mesInput){ alert('Elegí el mes a exportar'); return; }
+  const statusEl = document.getElementById('contable-status');
+  const btn = document.getElementById('btn-generar-excel');
+  btn.disabled = true;
+  statusEl.textContent = 'Generando... esto puede tardar unos segundos.';
+
+  try{
+    const [anio, mes] = mesInput.split('-').map(Number);
+    const inicio = new Date(anio, mes-1, 1);
+    const fin = new Date(anio, mes, 1); // primer día del mes siguiente
+    const inicioISO = inicio.toISOString();
+    const finISO = fin.toISOString();
+    const nombreMes = inicio.toLocaleDateString('es-AR', {month:'long', year:'numeric'});
+
+    // 1) Ventas del mes — se consulta directo a Firestore (el listener en
+    // memoria solo guarda los últimos 30 días, no alcanza para meses viejos)
+    const ventasSnap = await firestore.collection('ventas')
+      .where('fecha', '>=', inicioISO)
+      .where('fecha', '<', finISO)
+      .get();
+    const ventasDelMes = ventasSnap.docs.map(d=>d.data()).sort((a,b)=> new Date(a.fecha)-new Date(b.fecha));
+
+    const filasVentas = ventasDelMes.map(v=>({
+      'Fecha': new Date(v.fecha).toLocaleDateString('es-AR'),
+      'Hora': new Date(v.fecha).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}),
+      'N° Comprobante': v.numeroFormateado,
+      'Tipo': v.tipoComprobante==='factura' ? `Factura ${v.tipoFactura}` : 'Comprobante interno',
+      'Cliente': v.cliente || '',
+      'CUIT Cliente': v.cuit || '',
+      'CAE': v.cae || '',
+      'Total': v.total
+    }));
+    const totalVentasMes = ventasDelMes.reduce((a,v)=>a+v.total,0);
+    const totalFacturadoMes = ventasDelMes.filter(v=>v.tipoComprobante==='factura').reduce((a,v)=>a+v.total,0);
+    const totalInternoMes = totalVentasMes - totalFacturadoMes;
+
+    // 2) Movimientos de proveedores del mes — un query por proveedor a su
+    // subcolección de movimientos (son ~57, se puede hacer sin problema)
+    let filasMovimientos = [];
+    for(const pr of db.proveedores){
+      const snap = await firestore.collection('proveedores').doc(pr.id).collection('movimientos')
+        .where('fecha', '>=', inicioISO)
+        .where('fecha', '<', finISO)
+        .get();
+      snap.docs.forEach(d=>{
+        const m = d.data();
+        filasMovimientos.push({
+          'Fecha': new Date(m.fecha).toLocaleDateString('es-AR'),
+          'Proveedor': pr.nombre,
+          'CUIT': pr.cuit || '',
+          'Tipo': m.tipo==='compra' ? 'Compra' : 'Pago',
+          'Comprobante': m.comprobante || '',
+          'Monto': m.tipo==='compra' ? m.monto : -m.monto,
+          'Saldo resultante': m.saldoResultante
+        });
+      });
+    }
+    filasMovimientos.sort((a,b)=> a.Fecha.split('/').reverse().join('').localeCompare(b.Fecha.split('/').reverse().join('')));
+    const deudaTotalHoy = db.proveedores.reduce((a,p)=>a+(p.saldo||0),0);
+
+    // 3) Stock valorizado — a precio de venta actual (no hay costo cargado
+    // en el sistema, así que se valoriza al precio al que se vende)
+    const filasStock = db.productos.map(pr=>{
+      let stockTxt, precioRef, valor;
+      if(pr.tipoVenta==='unidad'){
+        stockTxt = pr.stockUnidades + ' un.';
+        precioRef = pr.precioUnidad || 0;
+        valor = (pr.stockUnidades||0) * precioRef;
+      } else {
+        stockTxt = (pr.stockKg||0) + ' kg';
+        precioRef = precioPorKg(pr);
+        valor = (pr.stockKg||0) * precioRef;
+      }
+      return {
+        'Producto': pr.nombre,
+        'Categoría': CAT_LABEL[pr.categoria] || pr.categoria,
+        'Tipo de venta': pr.tipoVenta==='unidad' ? 'Unidad' : 'Peso (bolsa/granel)',
+        'Stock actual': stockTxt,
+        'Precio de venta ref.': precioRef,
+        'Valor total': valor
+      };
+    });
+    const valorTotalStock = filasStock.reduce((a,f)=>a+f['Valor total'],0);
+
+    // 4) Hoja de resumen general
+    const filasResumen = [
+      { 'Concepto': `Período`, 'Valor': nombreMes },
+      { 'Concepto': 'Ventas totales del mes', 'Valor': totalVentasMes },
+      { 'Concepto': 'Ventas facturadas (ARCA) del mes', 'Valor': totalFacturadoMes },
+      { 'Concepto': 'Ventas por comprobante interno del mes', 'Valor': totalInternoMes },
+      { 'Concepto': 'Cantidad de comprobantes emitidos', 'Valor': ventasDelMes.length },
+      { 'Concepto': 'Deuda total a proveedores (a hoy)', 'Valor': deudaTotalHoy },
+      { 'Concepto': 'Valor del stock actual (a precio de venta, a hoy)', 'Valor': valorTotalStock }
+    ];
+
+    // Armado del Excel con SheetJS
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasResumen), 'Resumen');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasVentas.length ? filasVentas : [{'Info':'Sin ventas registradas este mes'}]), 'Ventas del mes');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasMovimientos.length ? filasMovimientos : [{'Info':'Sin movimientos de proveedores este mes'}]), 'Movimientos proveedores');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasStock), 'Stock valorizado');
+
+    const nombreArchivo = `Resumen-Forrajera-${mesInput}.xlsx`;
+    XLSX.writeFile(wb, nombreArchivo);
+    statusEl.textContent = `Listo — se descargó ${nombreArchivo}`;
+  }catch(err){
+    statusEl.textContent = '';
+    alert('Error al generar el Excel: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
 }
 
 function setTipoFactura(tipo){
