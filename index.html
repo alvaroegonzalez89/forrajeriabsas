@@ -329,6 +329,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="14" height="10" rx="1.5"/><path d="M15 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg>
       Proveedores
     </div>
+    <div class="nav-item" data-page="iva" onclick="irAPagina('iva')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9h.01M15 15h.01M15 9l-6 6"/></svg>
+      IVA
+    </div>
     <div class="nav-item" data-page="contable" onclick="irAPagina('contable')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
       Resumen Contable
@@ -450,9 +454,44 @@
           <button class="btn btn-outline btn-sm" onclick="abrirModalMovimiento()">+ Movimiento</button>
         </div>
         <table>
-          <thead><tr><th>Fecha</th><th>Tipo</th><th>Comprobante</th><th>Monto</th><th>Saldo resultante</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Remito/Factura</th><th>N° Comprobante</th><th>Monto</th><th>Saldo resultante</th></tr></thead>
           <tbody id="tabla-movimientos"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- IVA -->
+    <div class="page" id="page-iva">
+      <div class="page-header">
+        <div>
+          <h2>IVA</h2>
+          <div class="sub">Mes actual — débito de ventas facturadas menos crédito de compras con factura</div>
+        </div>
+      </div>
+      <div class="stats-grid" id="iva-cards"></div>
+      <div id="iva-status" style="font-size:12px;color:var(--cement-dim);margin-bottom:10px;"></div>
+
+      <div class="card">
+        <div class="section-label">IVA Débito — ventas facturadas del mes</div>
+        <div class="table-scroll" style="max-height:280px;">
+          <table>
+            <thead><tr><th>Fecha</th><th>Comprobante</th><th>Total</th><th>IVA (21%)</th></tr></thead>
+            <tbody id="tabla-iva-ventas"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-label">IVA Crédito — compras con factura del mes</div>
+        <div class="table-scroll" style="max-height:280px;">
+          <table>
+            <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Monto</th><th>IVA (21%)</th></tr></thead>
+            <tbody id="tabla-iva-compras"></tbody>
+          </table>
+        </div>
+        <p style="font-size:11.5px;color:var(--cement-dim);margin-top:10px;">
+          Las compras marcadas como "Remito" en la cuenta corriente de cada proveedor no suman acá — solo las que se cargaron como "Factura".
+        </p>
       </div>
     </div>
 
@@ -505,7 +544,7 @@
           <option value="almacen">Almacén</option>
         </select>
       </div>
-      <div class="field"><label>Código de barras</label><input type="text" id="prod-codigo" placeholder="7791234567890"></div>
+      <div class="field"><label>Código de barras (opcional)</label><input type="text" id="prod-codigo" placeholder="Dejalo vacío si no tiene"></div>
     </div>
     <div class="field"><label>Tipo de venta</label>
       <div class="radio-group">
@@ -613,12 +652,20 @@
     <h3>Nuevo movimiento</h3>
     <div class="field">
       <label>Tipo</label>
-      <select id="mov-tipo">
+      <select id="mov-tipo" onchange="toggleCampoComprobanteMov()">
         <option value="compra">Compra (aumenta saldo)</option>
         <option value="pago">Pago (disminuye saldo)</option>
       </select>
     </div>
-    <div class="field"><label>Monto ($)</label><input type="number" id="mov-monto" placeholder="150000"></div>
+    <div class="field" id="campo-mov-comprobante-tipo">
+      <label>Esta compra es con...</label>
+      <div class="radio-group">
+        <div class="radio-opt" id="opt-remito" onclick="setComprobanteMov('remito')">Remito<br><span style="font-weight:400;font-size:10.5px;">No suma IVA</span></div>
+        <div class="radio-opt selected" id="opt-factura-mov" onclick="setComprobanteMov('factura')">Factura<br><span style="font-weight:400;font-size:10.5px;">Suma IVA crédito</span></div>
+      </div>
+    </div>
+    <div class="field"><label>Monto ($)</label><input type="number" id="mov-monto" placeholder="150000" oninput="previewIvaMov()"></div>
+    <div class="precio-preview" id="preview-iva-mov" style="display:none;"></div>
     <div class="field"><label>N° comprobante / referencia</label><input type="text" id="mov-comprobante" placeholder="Factura 0001-00023456"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="cerrarModal('modal-movimiento')">Cancelar</button>
@@ -779,6 +826,7 @@ function irAPagina(nombre){
   document.querySelector(`.nav-item[data-page="${nombre}"]`).classList.add('active');
   if(nombre==='caja'){ renderCaja(); setTimeout(()=>document.getElementById('scanner-input').focus(),50); }
   if(nombre==='proveedores') renderProveedores();
+  if(nombre==='iva') renderIVA();
   if(nombre==='contable'){
     const mesInput = document.getElementById('contable-mes');
     if(!mesInput.value){
@@ -1281,6 +1329,71 @@ function abrirResumen(){
 // RESUMEN CONTABLE — arma un Excel de 4 hojas (Resumen, Ventas del mes,
 // Movimientos de proveedores, Stock valorizado) para mandarle al contador.
 // ============================================================
+// ============================================================
+// IVA — débito fiscal (21% de las ventas facturadas del mes) menos
+// crédito fiscal (21% de las compras a proveedores marcadas como
+// "Factura" del mes; las marcadas "Remito" no suman nada).
+// ============================================================
+async function renderIVA(){
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const finMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 1);
+  const inicioISO = inicioMes.toISOString(), finISO = finMes.toISOString();
+
+  // IVA Débito: ventas facturadas del mes. db.ventas ya tiene los
+  // últimos 30 días cargados por el listener general, alcanza para "este mes".
+  const ventasFacturadas = db.ventas.filter(v=>v.tipoComprobante==='factura' && v.fecha>=inicioISO && v.fecha<finISO);
+  const ivaDebito = ventasFacturadas.reduce((a,v)=> a + Math.round(v.total*0.21), 0);
+
+  document.getElementById('tabla-iva-ventas').innerHTML = ventasFacturadas.map(v=>`
+    <tr>
+      <td class="mono">${new Date(v.fecha).toLocaleDateString('es-AR')}</td>
+      <td>${v.numeroFormateado}</td>
+      <td class="mono">${money(v.total)}</td>
+      <td class="mono">${money(Math.round(v.total*0.21))}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--cement-dim);">Sin facturas este mes</td></tr>';
+
+  // IVA Crédito: hay que ir a buscar a la subcolección de movimientos de
+  // cada proveedor — no está cacheado en memoria como las ventas.
+  document.getElementById('iva-status').textContent = 'Buscando compras del mes en las cuentas de proveedores...';
+  let comprasFactura = [];
+  try{
+    for(const pr of db.proveedores){
+      const snap = await firestore.collection('proveedores').doc(pr.id).collection('movimientos')
+        .where('fecha', '>=', inicioISO)
+        .where('fecha', '<', finISO)
+        .get();
+      snap.docs.forEach(d=>{
+        const m = d.data();
+        if(m.tipo==='compra' && m.esFactura){
+          comprasFactura.push({ proveedor: pr.nombre, ...m });
+        }
+      });
+    }
+    document.getElementById('iva-status').textContent = '';
+  }catch(err){
+    document.getElementById('iva-status').textContent = 'Error al buscar compras: ' + err.message;
+  }
+  comprasFactura.sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
+  const ivaCredito = comprasFactura.reduce((a,m)=> a + (m.iva || Math.round(m.monto*0.21)), 0);
+
+  document.getElementById('tabla-iva-compras').innerHTML = comprasFactura.map(m=>`
+    <tr>
+      <td class="mono">${new Date(m.fecha).toLocaleDateString('es-AR')}</td>
+      <td>${m.proveedor}</td>
+      <td>${m.comprobante||'—'}</td>
+      <td class="mono">${money(m.monto)}</td>
+      <td class="mono">${money(m.iva || Math.round(m.monto*0.21))}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Sin compras facturadas este mes</td></tr>';
+
+  const saldoIVA = ivaDebito - ivaCredito;
+  document.getElementById('iva-cards').innerHTML = `
+    <div class="stat-card"><div class="label">IVA Débito (ventas)</div><div class="value">${money(ivaDebito)}</div></div>
+    <div class="stat-card ok"><div class="label">IVA Crédito (compras)</div><div class="value">${money(ivaCredito)}</div></div>
+    <div class="stat-card ${saldoIVA>0?'alert':'ok'}"><div class="label">Saldo IVA a pagar</div><div class="value">${money(saldoIVA)}</div></div>
+  `;
+}
+
 function precioPorKg(pr){
   if(pr.vendeGranel) return pr.precioGranelKg || 0;
   if(pr.vendeBolsa && pr.pesoBolsaKg) return Math.round((pr.precioBolsa||0) / pr.pesoBolsaKg);
@@ -1489,20 +1602,24 @@ async function verProveedor(id){
   document.getElementById('prov-detail').style.display = 'block';
   document.getElementById('prov-detail-nombre').textContent = pr.nombre + ' — Saldo: ' + money(pr.saldo);
   const tbody = document.getElementById('tabla-movimientos');
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--cement-dim);">Cargando...</td></tr>';
   try{
     const snap = await firestore.collection('proveedores').doc(id).collection('movimientos').orderBy('fecha','desc').get();
     const movimientos = snap.docs.map(d=>d.data());
-    tbody.innerHTML = movimientos.map(m=>`
+    tbody.innerHTML = movimientos.map(m=>{
+      const comprobanteTipo = m.tipo==='compra' ? (m.esFactura ? 'Factura' : 'Remito') : '—';
+      return `
       <tr>
         <td class="mono">${new Date(m.fecha).toLocaleDateString('es-AR')}</td>
         <td class="mov-tipo-${m.tipo}">${m.tipo==='compra'?'Compra':'Pago'}</td>
+        <td>${comprobanteTipo}</td>
         <td>${m.comprobante||'—'}</td>
         <td class="mono">${m.tipo==='compra'?'+':'-'}${money(m.monto)}</td>
         <td class="mono">${money(m.saldoResultante)}</td>
-      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Sin movimientos</td></tr>';
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--cement-dim);">Sin movimientos</td></tr>';
   }catch(err){
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--stock-crit);">Error al cargar movimientos: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--stock-crit);">Error al cargar movimientos: ${err.message}</td></tr>`;
   }
   document.getElementById('prov-detail').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -1511,7 +1628,35 @@ function abrirModalMovimiento(){
   if(!proveedorSeleccionado){ alert('Elegí un proveedor primero'); return; }
   document.getElementById('mov-monto').value = '';
   document.getElementById('mov-comprobante').value = '';
+  document.getElementById('mov-tipo').value = 'compra';
+  setComprobanteMov('factura');
+  toggleCampoComprobanteMov();
   document.getElementById('modal-movimiento').classList.add('active');
+}
+
+function toggleCampoComprobanteMov(){
+  const esCompra = document.getElementById('mov-tipo').value === 'compra';
+  document.getElementById('campo-mov-comprobante-tipo').style.display = esCompra ? 'block' : 'none';
+  document.getElementById('preview-iva-mov').style.display = 'none';
+  previewIvaMov();
+}
+function setComprobanteMov(tipo){
+  document.getElementById('modal-movimiento').dataset.comprobanteTipo = tipo;
+  document.getElementById('opt-remito').classList.toggle('selected', tipo==='remito');
+  document.getElementById('opt-factura-mov').classList.toggle('selected', tipo==='factura');
+  previewIvaMov();
+}
+function previewIvaMov(){
+  const esCompra = document.getElementById('mov-tipo').value === 'compra';
+  const esFactura = document.getElementById('modal-movimiento').dataset.comprobanteTipo !== 'remito';
+  const monto = Number(document.getElementById('mov-monto').value) || 0;
+  const preview = document.getElementById('preview-iva-mov');
+  if(esCompra && esFactura && monto>0){
+    preview.style.display = 'block';
+    preview.textContent = 'IVA crédito fiscal (21%): ' + money(Math.round(monto*0.21));
+  } else {
+    preview.style.display = 'none';
+  }
 }
 
 // El saldo del proveedor y el nuevo movimiento se escriben en la misma
@@ -1522,6 +1667,10 @@ async function guardarMovimiento(){
   const monto = Number(document.getElementById('mov-monto').value);
   if(!monto || monto<=0){ alert('Ingresá un monto válido'); return; }
   const comprobante = document.getElementById('mov-comprobante').value.trim();
+  // Solo aplica a compras: si es "remito" no suma IVA crédito, si es
+  // "factura" sí. Los pagos nunca generan IVA.
+  const esFactura = tipo==='compra' && document.getElementById('modal-movimiento').dataset.comprobanteTipo !== 'remito';
+  const iva = esFactura ? Math.round(monto * 0.21) : 0;
   const provRef = firestore.collection('proveedores').doc(proveedorSeleccionado);
   const movRef = provRef.collection('movimientos').doc();
 
@@ -1535,6 +1684,7 @@ async function guardarMovimiento(){
       tx.set(movRef, {
         fecha: new Date().toISOString(),
         tipo, monto, comprobante,
+        esFactura, iva,
         saldoResultante: nuevoSaldo
       });
     });
