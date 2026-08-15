@@ -127,6 +127,11 @@
     border-radius:8px;color:var(--cement);font-size:13px;font-family:'Inter',sans-serif;
   }
   .search-box input:focus{outline:none;border-color:var(--safety);}
+  .sort-select{
+    padding:9px 12px;background:var(--graphite);border:1px solid var(--border);
+    border-radius:8px;color:var(--cement);font-size:13px;font-family:'Inter',sans-serif;cursor:pointer;
+  }
+  .sort-select:focus{outline:none;border-color:var(--safety);}
   .search-box svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--cement-dim);}
 
   /* Dashboard cards */
@@ -366,6 +371,15 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
             <input type="text" id="stock-search" placeholder="Buscar producto o código..." oninput="renderStock()">
           </div>
+          <select id="stock-orden" class="sort-select" onchange="renderStock()">
+            <option value="nombre-asc">Nombre (A-Z)</option>
+            <option value="nombre-desc">Nombre (Z-A)</option>
+            <option value="precio-desc">Precio (mayor a menor)</option>
+            <option value="precio-asc">Precio (menor a mayor)</option>
+            <option value="stock-desc">Stock (mayor a menor)</option>
+            <option value="stock-asc">Stock (menor a mayor)</option>
+            <option value="categoria-asc">Categoría</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalProducto()">+ Nuevo producto</button>
         </div>
       </div>
@@ -1014,12 +1028,33 @@ function renderCatTabs(contId, filtroActual, onClickFn){
 function setFiltroStockCat(c){ filtroStockCat = c; renderStock(); }
 function setFiltroCajaCat(c){ filtroCajaCat = c; renderCaja(); }
 
+function precioOrden(pr){
+  if(pr.tipoVenta==='unidad') return pr.precioUnidad || 0;
+  return pr.precioBolsa || pr.precioGranelKg || 0;
+}
+function stockOrden(pr){
+  return pr.tipoVenta==='unidad' ? (pr.stockUnidades||0) : (pr.stockKg||0);
+}
+
 function renderStock(){
   renderCatTabs('stock-cat-tabs', filtroStockCat, 'setFiltroStockCat');
   const q = (document.getElementById('stock-search').value || '').toLowerCase().trim();
   let lista = db.productos;
   if(filtroStockCat!=='todas') lista = lista.filter(pr=>pr.categoria===filtroStockCat);
   if(q) lista = lista.filter(pr=> pr.nombre.toLowerCase().includes(q) || (pr.codigoBarras||'').includes(q));
+
+  lista = [...lista];
+  const orden = document.getElementById('stock-orden').value;
+  const comparadores = {
+    'nombre-asc': (a,b)=> a.nombre.localeCompare(b.nombre, 'es'),
+    'nombre-desc': (a,b)=> b.nombre.localeCompare(a.nombre, 'es'),
+    'precio-desc': (a,b)=> precioOrden(b) - precioOrden(a),
+    'precio-asc': (a,b)=> precioOrden(a) - precioOrden(b),
+    'stock-desc': (a,b)=> stockOrden(b) - stockOrden(a),
+    'stock-asc': (a,b)=> stockOrden(a) - stockOrden(b),
+    'categoria-asc': (a,b)=> (CAT_LABEL[a.categoria]||'').localeCompare(CAT_LABEL[b.categoria]||'', 'es') || a.nombre.localeCompare(b.nombre,'es')
+  };
+  lista.sort(comparadores[orden] || comparadores['nombre-asc']);
 
   document.getElementById('stock-count-sub').textContent = `${lista.length} de ${db.productos.length} productos`;
   const tbody = document.getElementById('tabla-stock');
