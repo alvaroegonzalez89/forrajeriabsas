@@ -1615,7 +1615,7 @@ function renderProveedores(){
   if(q) lista = lista.filter(pr => pr.nombre.toLowerCase().includes(q) || (pr.cuit||'').includes(q));
 
   document.getElementById('prov-count-sub').textContent =
-    `Mostrando ${lista.length} de ${db.proveedores.length} cargados · en producción manejarían los ${db.totalProveedoresReal} proveedores reales`;
+    `${lista.length} de ${db.proveedores.length} proveedores`;
 
   const tbody = document.getElementById('tabla-proveedores');
   document.getElementById('prov-empty').style.display = lista.length ? 'none' : 'block';
