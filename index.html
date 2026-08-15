@@ -415,6 +415,10 @@
               <div class="scanner-hint">La ticketera lee el código y carga el producto automáticamente al presionar Enter.</div>
             </div>
           </div>
+          <div class="search-box" style="width:100%;margin-bottom:12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="text" id="caja-search" placeholder="Buscar producto por nombre..." oninput="renderCaja()">
+          </div>
           <div class="prod-filter-tabs" id="caja-cat-tabs"></div>
           <div class="prod-pick" id="caja-productos"></div>
         </div>
@@ -1098,6 +1102,8 @@ function renderCaja(){
   renderCatTabs('caja-cat-tabs', filtroCajaCat, 'setFiltroCajaCat');
   let lista = db.productos;
   if(filtroCajaCat!=='todas') lista = lista.filter(pr=>pr.categoria===filtroCajaCat);
+  const qCaja = (document.getElementById('caja-search').value || '').toLowerCase().trim();
+  if(qCaja) lista = lista.filter(pr=> pr.nombre.toLowerCase().includes(qCaja) || (pr.codigoBarras||'').includes(qCaja));
 
   const cont = document.getElementById('caja-productos');
   cont.innerHTML = lista.map(pr=>{
@@ -1118,7 +1124,7 @@ function renderCaja(){
       </div>
       <div class="modo-btns">${botones}</div>
     </div>`;
-  }).join('') || '<div class="empty-state">No hay productos en esta categoría</div>';
+  }).join('') || '<div class="empty-state">No hay productos que coincidan</div>';
 
   document.getElementById('ticket-num').textContent = 'N° ' + String(db.ultimoTicket + 1).padStart(6,'0');
   renderTicket();
