@@ -338,6 +338,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9h.01M15 15h.01M15 9l-6 6"/></svg>
       IVA
     </div>
+    <div class="nav-item" data-page="gastos" onclick="irAPagina('gastos')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2"/><path d="M13 12h8l-2.5-2.5M21 12l-2.5 2.5"/></svg>
+      Gastos
+    </div>
     <div class="nav-item" data-page="contable" onclick="irAPagina('contable')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
       Resumen Contable
@@ -511,6 +515,37 @@
           Las compras marcadas como "Remito" en la cuenta corriente de cada proveedor no suman acá — solo las que se cargaron como "Factura".
         </p>
       </div>
+
+      <div class="card">
+        <div class="section-label">IVA Crédito — gastos con factura del mes</div>
+        <div class="table-scroll" style="max-height:280px;">
+          <table>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Comprobante</th><th>Monto</th><th>IVA (21%)</th></tr></thead>
+            <tbody id="tabla-iva-gastos"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- GASTOS -->
+    <div class="page" id="page-gastos">
+      <div class="page-header">
+        <div>
+          <h2>Gastos</h2>
+          <div class="sub" id="gastos-count-sub"></div>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModalGasto()">+ Nuevo gasto</button>
+      </div>
+      <div class="stats-grid" id="gastos-cards"></div>
+      <div class="card">
+        <div class="table-scroll" style="max-height:520px;">
+          <table>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Remito/Factura</th><th>N° Comprobante</th><th>Monto</th><th></th></tr></thead>
+            <tbody id="tabla-gastos"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="gastos-empty" style="display:none;">Todavía no cargaste gastos.</div>
+      </div>
     </div>
 
     <!-- RESUMEN CONTABLE -->
@@ -527,10 +562,10 @@
           <input type="month" id="contable-mes">
         </div>
         <p style="font-size:12.5px;color:var(--cement-dim);line-height:1.6;margin:6px 0 18px;">
-          El Excel va a incluir 4 hojas: <b>Resumen</b> (totales generales), <b>Ventas del mes</b> (cada comprobante emitido),
-          <b>Movimientos de proveedores</b> (compras y pagos del mes en cada cuenta corriente) y <b>Stock valorizado</b>
-          (el inventario actual a precio de venta — esto último siempre refleja el stock de HOY, no el de fin de mes,
-          porque el sistema no guarda una foto histórica del stock día por día).
+          El Excel va a incluir 5 hojas: <b>Resumen</b> (totales generales e IVA), <b>Ventas del mes</b> (cada comprobante emitido),
+          <b>Movimientos de proveedores</b> (compras y pagos del mes en cada cuenta corriente), <b>Gastos</b> (todos los gastos
+          cargados en el mes) y <b>Stock valorizado</b> (el inventario actual a precio de venta — esto último siempre refleja
+          el stock de HOY, no el de fin de mes, porque el sistema no guarda una foto histórica del stock día por día).
         </p>
         <button class="btn btn-primary" id="btn-generar-excel" onclick="generarResumenContable()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
@@ -664,6 +699,31 @@
   </div>
 </div>
 
+<!-- ============ MODAL NUEVO GASTO ============ -->
+<div class="modal-overlay" id="modal-gasto">
+  <div class="modal">
+    <h3>Nuevo gasto</h3>
+    <div class="field"><label>Concepto</label><input type="text" id="gasto-concepto" placeholder="Ej: Alquiler, Luz, Combustible, Sueldos..."></div>
+    <div class="field-row">
+      <div class="field"><label>Monto ($)</label><input type="number" id="gasto-monto" placeholder="50000" oninput="previewIvaGasto()"></div>
+      <div class="field"><label>Fecha</label><input type="date" id="gasto-fecha"></div>
+    </div>
+    <div class="field">
+      <label>Este gasto es con...</label>
+      <div class="radio-group">
+        <div class="radio-opt" id="opt-gasto-remito" onclick="setComprobanteGasto('remito')">Remito<br><span style="font-weight:400;font-size:10.5px;">No suma IVA</span></div>
+        <div class="radio-opt selected" id="opt-gasto-factura" onclick="setComprobanteGasto('factura')">Factura<br><span style="font-weight:400;font-size:10.5px;">Suma IVA crédito</span></div>
+      </div>
+    </div>
+    <div class="precio-preview" id="preview-iva-gasto" style="display:none;"></div>
+    <div class="field"><label>N° comprobante / referencia (opcional)</label><input type="text" id="gasto-comprobante" placeholder="Factura 0001-00023456"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cerrarModal('modal-gasto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarGasto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL MOVIMIENTO PROVEEDOR ============ -->
 <div class="modal-overlay" id="modal-movimiento">
   <div class="modal">
@@ -736,7 +796,7 @@ auth.signOut();
 // las funciones de render (renderStock, renderCaja, etc.) no cambiaron:
 // siguen leyendo de estas mismas variables.
 // ============================================================
-let db = { productos: [], proveedores: [], ventas: [], ultimoTicket: 0, ultimoFactura: 0, totalProveedoresReal: 57 };
+let db = { productos: [], proveedores: [], ventas: [], gastos: [], ultimoTicket: 0, ultimoFactura: 0, totalProveedoresReal: 57 };
 let proveedorSeleccionado = null;
 let ticketActual = [];
 let filtroStockCat = 'todas';
@@ -815,6 +875,20 @@ function iniciarListeners(){
     db.proveedores = [];
   }
 
+  // Gastos: igual que proveedores, es información financiera exclusiva
+  // del admin. Últimos 30 días en memoria, igual que ventas.
+  if(rolActual === 'admin'){
+    const hace30diasGastos = new Date(); hace30diasGastos.setDate(hace30diasGastos.getDate()-30);
+    firestore.collection('gastos')
+      .where('fecha', '>=', hace30diasGastos.toISOString())
+      .onSnapshot(snap=>{
+        db.gastos = snap.docs.map(d=>({id:d.id, ...d.data()}));
+        renderGastos(); renderDashboard();
+      }, err=>console.error('Error leyendo gastos:', err));
+  } else {
+    db.gastos = [];
+  }
+
   // Solo los últimos 30 días — evita leer todo el historial de ventas
   // cada vez que alguien abre la caja (Firestore cobra por lectura)
   const hace30dias = new Date(); hace30dias.setDate(hace30dias.getDate()-30);
@@ -845,6 +919,7 @@ function irAPagina(nombre){
   if(nombre==='caja'){ renderCaja(); setTimeout(()=>document.getElementById('scanner-input').focus(),50); }
   if(nombre==='proveedores') renderProveedores();
   if(nombre==='iva') renderIVA();
+  if(nombre==='gastos') renderGastos();
   if(nombre==='contable'){
     const mesInput = document.getElementById('contable-mes');
     if(!mesInput.value){
@@ -1375,6 +1450,93 @@ function abrirResumen(){
 // crédito fiscal (21% de las compras a proveedores marcadas como
 // "Factura" del mes; las marcadas "Remito" no suman nada).
 // ============================================================
+// ============================================================
+// GASTOS — gastos generales del negocio (alquiler, luz, combustible,
+// sueldos, etc). Mismo criterio Remito/Factura que las compras a
+// proveedores: solo lo marcado "Factura" suma IVA crédito.
+// ============================================================
+function setComprobanteGasto(tipo){
+  document.getElementById('modal-gasto').dataset.comprobanteTipo = tipo;
+  document.getElementById('opt-gasto-remito').classList.toggle('selected', tipo==='remito');
+  document.getElementById('opt-gasto-factura').classList.toggle('selected', tipo==='factura');
+  previewIvaGasto();
+}
+function previewIvaGasto(){
+  const esFactura = document.getElementById('modal-gasto').dataset.comprobanteTipo !== 'remito';
+  const monto = Number(document.getElementById('gasto-monto').value) || 0;
+  const preview = document.getElementById('preview-iva-gasto');
+  if(esFactura && monto>0){
+    preview.style.display = 'block';
+    preview.textContent = 'IVA crédito fiscal (21%): ' + money(Math.round(monto*0.21));
+  } else {
+    preview.style.display = 'none';
+  }
+}
+function abrirModalGasto(){
+  document.getElementById('gasto-concepto').value = '';
+  document.getElementById('gasto-monto').value = '';
+  document.getElementById('gasto-comprobante').value = '';
+  document.getElementById('gasto-fecha').value = new Date().toISOString().slice(0,10);
+  setComprobanteGasto('factura');
+  document.getElementById('modal-gasto').classList.add('active');
+}
+async function guardarGasto(){
+  const concepto = document.getElementById('gasto-concepto').value.trim();
+  const monto = Number(document.getElementById('gasto-monto').value);
+  if(!concepto){ alert('Poné un concepto para el gasto'); return; }
+  if(!monto || monto<=0){ alert('Ingresá un monto válido'); return; }
+  const fechaInput = document.getElementById('gasto-fecha').value; // "2026-08-20"
+  const fecha = fechaInput ? new Date(fechaInput + 'T12:00:00').toISOString() : new Date().toISOString();
+  const esFactura = document.getElementById('modal-gasto').dataset.comprobanteTipo !== 'remito';
+  const iva = esFactura ? Math.round(monto * 0.21) : 0;
+  try{
+    await firestore.collection('gastos').add({
+      concepto, monto, fecha,
+      esFactura, iva,
+      comprobante: document.getElementById('gasto-comprobante').value.trim()
+    });
+    cerrarModal('modal-gasto');
+  }catch(err){
+    alert('Error al guardar el gasto: ' + err.message);
+  }
+}
+async function eliminarGasto(id){
+  if(!confirm('¿Eliminar este gasto?')) return;
+  try{
+    await firestore.collection('gastos').doc(id).delete();
+  }catch(err){
+    alert('Error al eliminar: ' + err.message);
+  }
+}
+function renderGastos(){
+  const hoy = new Date();
+  const gastosDelMes = db.gastos.filter(g=>{
+    const f = new Date(g.fecha);
+    return f.getMonth()===hoy.getMonth() && f.getFullYear()===hoy.getFullYear();
+  });
+  const totalMes = gastosDelMes.reduce((a,g)=>a+g.monto,0);
+  const ivaMes = gastosDelMes.filter(g=>g.esFactura).reduce((a,g)=>a+(g.iva||0),0);
+
+  document.getElementById('gastos-cards').innerHTML = `
+    <div class="stat-card"><div class="label">Gastos de este mes</div><div class="value">${money(totalMes)}</div></div>
+    <div class="stat-card ok"><div class="label">IVA crédito de gastos (mes)</div><div class="value">${money(ivaMes)}</div></div>
+    <div class="stat-card"><div class="label">Cantidad de gastos (mes)</div><div class="value">${gastosDelMes.length}</div></div>
+  `;
+
+  const lista = [...db.gastos].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
+  document.getElementById('gastos-count-sub').textContent = `${lista.length} gastos cargados (últimos 30 días)`;
+  document.getElementById('gastos-empty').style.display = lista.length ? 'none' : 'block';
+  document.getElementById('tabla-gastos').innerHTML = lista.map(g=>`
+    <tr>
+      <td class="mono">${new Date(g.fecha).toLocaleDateString('es-AR')}</td>
+      <td>${g.concepto}</td>
+      <td>${g.esFactura ? 'Factura' : 'Remito'}</td>
+      <td>${g.comprobante||'—'}</td>
+      <td class="mono">${money(g.monto)}</td>
+      <td><button class="icon-btn" onclick="eliminarGasto('${g.id}')" title="Eliminar">✕</button></td>
+    </tr>`).join('');
+}
+
 async function renderIVA(){
   const hoy = new Date();
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -1416,7 +1578,7 @@ async function renderIVA(){
     document.getElementById('iva-status').textContent = 'Error al buscar compras: ' + err.message;
   }
   comprasFactura.sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
-  const ivaCredito = comprasFactura.reduce((a,m)=> a + (m.iva || Math.round(m.monto*0.21)), 0);
+  const ivaCreditoCompras = comprasFactura.reduce((a,m)=> a + (m.iva || Math.round(m.monto*0.21)), 0);
 
   document.getElementById('tabla-iva-compras').innerHTML = comprasFactura.map(m=>`
     <tr>
@@ -1427,10 +1589,25 @@ async function renderIVA(){
       <td class="mono">${money(m.iva || Math.round(m.monto*0.21))}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Sin compras facturadas este mes</td></tr>';
 
+  // Gastos generales facturados del mes — segunda fuente de IVA crédito,
+  // ya está en memoria (mismo listener de 30 días que la página Gastos)
+  const gastosFactura = db.gastos.filter(g=> g.esFactura && g.fecha>=inicioISO && g.fecha<finISO);
+  const ivaCreditoGastos = gastosFactura.reduce((a,g)=> a + (g.iva || Math.round(g.monto*0.21)), 0);
+
+  document.getElementById('tabla-iva-gastos').innerHTML = gastosFactura.map(g=>`
+    <tr>
+      <td class="mono">${new Date(g.fecha).toLocaleDateString('es-AR')}</td>
+      <td>${g.concepto}</td>
+      <td>${g.comprobante||'—'}</td>
+      <td class="mono">${money(g.monto)}</td>
+      <td class="mono">${money(g.iva || Math.round(g.monto*0.21))}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Sin gastos facturados este mes</td></tr>';
+
+  const ivaCredito = ivaCreditoCompras + ivaCreditoGastos;
   const saldoIVA = ivaDebito - ivaCredito;
   document.getElementById('iva-cards').innerHTML = `
     <div class="stat-card"><div class="label">IVA Débito (ventas)</div><div class="value">${money(ivaDebito)}</div></div>
-    <div class="stat-card ok"><div class="label">IVA Crédito (compras)</div><div class="value">${money(ivaCredito)}</div></div>
+    <div class="stat-card ok"><div class="label">IVA Crédito (compras + gastos)</div><div class="value">${money(ivaCredito)}</div></div>
     <div class="stat-card ${saldoIVA>0?'alert':'ok'}"><div class="label">Saldo IVA a pagar</div><div class="value">${money(saldoIVA)}</div></div>
   `;
 }
@@ -1527,13 +1704,35 @@ async function generarResumenContable(){
     });
     const valorTotalStock = filasStock.reduce((a,f)=>a+f['Valor total'],0);
 
-    // 4) Hoja de resumen general
+    // 4) Gastos del mes — se consulta directo a Firestore, igual que ventas
+    const gastosSnap = await firestore.collection('gastos')
+      .where('fecha', '>=', inicioISO)
+      .where('fecha', '<', finISO)
+      .get();
+    const gastosDelMes = gastosSnap.docs.map(d=>d.data()).sort((a,b)=> new Date(a.fecha)-new Date(b.fecha));
+    const filasGastos = gastosDelMes.map(g=>({
+      'Fecha': new Date(g.fecha).toLocaleDateString('es-AR'),
+      'Concepto': g.concepto,
+      'Tipo': g.esFactura ? 'Factura' : 'Remito',
+      'N° Comprobante': g.comprobante || '',
+      'Monto': g.monto,
+      'IVA (21%)': g.esFactura ? (g.iva || Math.round(g.monto*0.21)) : 0
+    }));
+    const totalGastosMes = gastosDelMes.reduce((a,g)=>a+g.monto,0);
+    const ivaCreditoGastosMes = gastosDelMes.filter(g=>g.esFactura).reduce((a,g)=>a+(g.iva||Math.round(g.monto*0.21)),0);
+
+    // 5) Hoja de resumen general
+    const totalFacturasVentaMes = ventasDelMes.filter(v=>v.tipoComprobante==='factura').length;
+    const ivaDebitoMes = ventasDelMes.filter(v=>v.tipoComprobante==='factura').reduce((a,v)=>a+Math.round(v.total*0.21),0);
     const filasResumen = [
       { 'Concepto': `Período`, 'Valor': nombreMes },
       { 'Concepto': 'Ventas totales del mes', 'Valor': totalVentasMes },
       { 'Concepto': 'Ventas facturadas (ARCA) del mes', 'Valor': totalFacturadoMes },
       { 'Concepto': 'Ventas por comprobante interno del mes', 'Valor': totalInternoMes },
       { 'Concepto': 'Cantidad de comprobantes emitidos', 'Valor': ventasDelMes.length },
+      { 'Concepto': 'IVA Débito (21% de ventas facturadas)', 'Valor': ivaDebitoMes },
+      { 'Concepto': 'Gastos totales del mes', 'Valor': totalGastosMes },
+      { 'Concepto': 'IVA Crédito de gastos con factura', 'Valor': ivaCreditoGastosMes },
       { 'Concepto': 'Deuda total a proveedores (a hoy)', 'Valor': deudaTotalHoy },
       { 'Concepto': 'Valor del stock actual (a precio de venta, a hoy)', 'Valor': valorTotalStock }
     ];
@@ -1543,6 +1742,7 @@ async function generarResumenContable(){
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasResumen), 'Resumen');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasVentas.length ? filasVentas : [{'Info':'Sin ventas registradas este mes'}]), 'Ventas del mes');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasMovimientos.length ? filasMovimientos : [{'Info':'Sin movimientos de proveedores este mes'}]), 'Movimientos proveedores');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasGastos.length ? filasGastos : [{'Info':'Sin gastos registrados este mes'}]), 'Gastos');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasStock), 'Stock valorizado');
 
     const nombreArchivo = `Resumen-Forrajera-${mesInput}.xlsx`;
