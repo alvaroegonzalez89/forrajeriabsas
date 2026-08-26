@@ -32,7 +32,7 @@
     -webkit-font-smoothing:antialiased;
   }
   h1,h2,h3,.display{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:0.3px;}
-  .mono{font-family:'JetBrains Mono',monospace;}
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:slashed-zero;}
   svg{display:block;}
 
   /* ---------- LOGIN ---------- */
@@ -272,7 +272,7 @@
   .resumen-card .value{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;margin-top:5px;}
 
   /* Comprobante imprimible — pensado para ticketera térmica 80mm */
-  .print-ticket{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--cement);line-height:1.55;}
+  .print-ticket{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--cement);line-height:1.55;font-variant-numeric:slashed-zero;}
   .print-ticket .pt-header{text-align:center;margin-bottom:10px;}
   .print-ticket .pt-header .pt-brand{font-family:'Big Shoulders Display',sans-serif;font-size:19px;font-weight:800;}
   .print-ticket .pt-header .pt-sub{font-size:10px;color:var(--cement-dim);}
@@ -280,7 +280,7 @@
   .print-ticket .pt-row{display:flex;justify-content:space-between;gap:8px;}
   .print-ticket .pt-item{display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;}
   .print-ticket .pt-total{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin-top:6px;}
-  .print-ticket .pt-cae{font-size:10px;color:var(--stock-ok);word-break:break-all;}
+  .print-ticket .pt-cae{font-size:13px;font-weight:700;letter-spacing:1px;color:var(--stock-ok);word-break:break-all;}
   .print-ticket .pt-foot{text-align:center;font-size:9.5px;color:var(--cement-dim);margin-top:10px;}
 
   @media print{
@@ -692,8 +692,9 @@
 <div class="modal-overlay" id="modal-comprobante">
   <div class="modal" style="max-width:340px;">
     <div class="print-ticket" id="print-ticket-content"></div>
-    <div class="modal-actions no-print">
+    <div class="modal-actions no-print" style="flex-wrap:wrap;">
       <button class="btn btn-outline" onclick="cerrarModal('modal-comprobante')">Cerrar</button>
+      <button class="btn btn-outline" onclick="descargarComprobantePDF()">⬇ Descargar PDF</button>
       <button class="btn btn-primary" onclick="window.print()">🖨 Imprimir</button>
     </div>
   </div>
@@ -753,6 +754,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1424,7 +1426,12 @@ function formatearFechaCae(yyyymmdd){
 // ============================================================
 // COMPROBANTE IMPRIMIBLE (pensado para ticketera térmica 80mm)
 // ============================================================
+// Venta actualmente mostrada en el modal de comprobante — se usa para
+// poder generarle el PDF a pedido, sin tener que recalcular todo de nuevo.
+let ventaComprobanteActual = null;
+
 function mostrarComprobante(venta){
+  ventaComprobanteActual = venta; // para poder descargarla en PDF después
   const fecha = new Date(venta.fecha);
   const fechaTxt = fecha.toLocaleDateString('es-AR') + ' ' + fecha.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   const itemsHtml = venta.items.map(it=>{
@@ -1466,6 +1473,79 @@ function mostrarComprobante(venta){
     <div class="pt-foot">¡Gracias por su compra!</div>
   `;
   document.getElementById('modal-comprobante').classList.add('active');
+}
+
+// ============================================================
+// DESCARGAR COMPROBANTE EN PDF — mismo contenido que el ticket en
+// pantalla, para poder mandarlo por WhatsApp/mail sin pasar por el
+// diálogo de impresión del navegador.
+// ============================================================
+function descargarComprobantePDF(){
+  const venta = ventaComprobanteActual;
+  if(!venta){ alert('No hay ningún comprobante para descargar'); return; }
+  if(!window.jspdf){ alert('No se pudo cargar el generador de PDF. Revisá tu conexión e intentá de nuevo.'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:[80, 200] }); // ancho tipo ticket térmico
+  const anchoUtil = 72; // mm, con margen
+  let y = 10;
+  const margenX = 4;
+
+  function linea(texto, opts={}){
+    const { size=9, bold=false, align='left', color=[38,43,48], gap=4.2 } = opts;
+    doc.setFontSize(size);
+    doc.setFont('courier', bold ? 'bold' : 'normal');
+    doc.setTextColor(...color);
+    const x = align==='center' ? 40 : margenX;
+    doc.text(texto, x, y, { align, maxWidth: anchoUtil });
+    y += gap;
+  }
+  function raya(){
+    doc.setDrawColor(200,200,200);
+    doc.line(margenX, y, 80-margenX, y);
+    y += 4;
+  }
+
+  linea(NEGOCIO.nombreFantasia, {size:13, bold:true, align:'center', gap:5.5});
+  linea(`${NEGOCIO.razonSocial} — CUIT ${NEGOCIO.cuit}`, {size:7.5, align:'center', color:[110,115,120], gap:3.6});
+  linea(NEGOCIO.domicilio, {size:7.5, align:'center', color:[110,115,120], gap:3.6});
+  linea(NEGOCIO.condicionIVA, {size:7.5, align:'center', color:[110,115,120], gap:5});
+
+  const fecha = new Date(venta.fecha);
+  const fechaTxt = fecha.toLocaleDateString('es-AR') + ' ' + fecha.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  const encabezado = venta.tipoComprobante==='factura'
+    ? `FACTURA ${venta.tipoFactura} N° ${venta.numeroFormateado}`
+    : `COMPROBANTE INTERNO N° ${venta.numeroFormateado}`;
+  linea(encabezado, {size:8.5, bold:true, align:'center', gap:4});
+  linea(fechaTxt, {size:7.5, align:'center', color:[110,115,120], gap:5});
+  raya();
+
+  venta.items.forEach(it=>{
+    const cantidadTxt = it.modo==='bolsa' ? it.cantidad+' bolsa'+(it.cantidad>1?'s':'')
+                      : it.modo==='unidad' ? it.cantidad+' un.'
+                      : it.cantidad+' kg';
+    linea(`${it.nombre} (${cantidadTxt})`, {size:8, gap:3.6});
+    linea(money(it.subtotal), {size:8, align:'right', gap:5});
+  });
+  raya();
+  linea(`TOTAL: ${money(venta.total)}`, {size:11, bold:true, gap:7});
+
+  if(venta.tipoComprobante==='factura'){
+    raya();
+    linea(`Cliente: ${venta.cliente}`, {size:8, gap:4});
+    if(venta.cuit) linea(`CUIT: ${venta.cuit}`, {size:8, gap:4});
+    linea('CAE:', {size:8, gap:4});
+    linea(venta.cae, {size:10, bold:true, color:[75,141,73], gap:5});
+    linea(`Vto. CAE: ${venta.caeVencimiento}`, {size:8, gap:5});
+  } else {
+    raya();
+    linea('Documento sin validez fiscal — control interno', {size:7, align:'center', color:[110,115,120], gap:4});
+  }
+
+  y += 2;
+  linea('¡Gracias por su compra!', {size:8, align:'center', color:[110,115,120]});
+
+  doc.save(`${venta.tipoComprobante==='factura'?'Factura':'Comprobante'}-${venta.numeroFormateado}.pdf`);
 }
 
 // ============================================================
