@@ -783,6 +783,10 @@ const NEGOCIO = {
   condicionIVA: 'Responsable Inscripto'
 };
 
+// Facturación electrónica real — Worker de Cloudflare conectado a ARCA vía AfipSDK
+const WORKER_ARCA_URL = 'https://forrajeria-arca.alvaroegonzalez89.workers.dev';
+const PTO_VTA_ARCA = 2; // punto de venta RECE para aplicativo y web services
+
 // Rol del usuario logueado ('admin' | 'ventas') — se completa después
 // de autenticar, leyendo el documento usuarios/{uid}.
 let rolActual = null;
@@ -1294,13 +1298,65 @@ function renderTicket(){
 // la única diferencia es la numeración/registro fiscal, nunca si la
 // venta queda o no reflejada en el sistema.
 //
-// Todo esto va en una sola runTransaction: si dos cajas cobran al mismo
-// tiempo, Firestore reintenta la transacción que pierde la carrera en vez
-// de dejar pisado el número de ticket/factura o el stock de un producto.
+// Para "factura": primero se pide el CAE real a ARCA (fuera de cualquier
+// transacción de Firestore, porque es una llamada de red y no debe
+// reintentarse sola si Firestore reintenta la transacción). Recién con el
+// CAE ya confirmado se entra a Firestore para descontar stock y guardar
+// la venta — así nunca se pide un CAE dos veces por la misma venta.
 async function registrarVenta(tipoComprobante, datosFactura){
   if(ticketActual.length===0){ alert('El ticket está vacío'); return; }
   const total = ticketActual.reduce((a,i)=>a+i.subtotal,0);
   const itemsVenta = ticketActual;
+  let extraFactura = {};
+
+  if(tipoComprobante === 'factura'){
+    try{
+      const cuitLimpio = (datosFactura.cuit || '').replace(/\D/g,'');
+      const esFacturaA = datosFactura.tipo === 'A';
+      // Nuestros precios son finales (con IVA incluido) — discriminamos
+      // neto + IVA(21%) para que sumen exacto al total.
+      const iva = Math.round((total - total/1.21) * 100) / 100;
+      const neto = Math.round((total - iva) * 100) / 100;
+
+      const payload = {
+        environment: 'prod',
+        ptoVta: PTO_VTA_ARCA,
+        cbteTipo: esFacturaA ? 1 : 6,          // 1 = Factura A, 6 = Factura B
+        docTipo: cuitLimpio.length===11 ? 80 : 99,  // 80 = CUIT, 99 = Consumidor Final
+        docNro: cuitLimpio.length===11 ? Number(cuitLimpio) : 0,
+        concepto: 1,                             // 1 = Productos
+        importeTotal: total,
+        importeNeto: neto,
+        importeIVA: iva,
+        condicionIVAReceptorId: esFacturaA ? 1 : 5  // 1 = Resp. Inscripto, 5 = Consumidor Final
+      };
+
+      const res = await fetch(WORKER_ARCA_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if(!res.ok || !data.ok){
+        alert('ARCA rechazó la factura y no se registró nada.\n\n' + (data.error || 'Error desconocido') + (data.errores ? '\n' + JSON.stringify(data.errores) : ''));
+        return;
+      }
+
+      extraFactura = {
+        tipoFactura: datosFactura.tipo,
+        cliente: datosFactura.nombre || 'Consumidor Final',
+        cuit: datosFactura.cuit || '',
+        cae: data.cae,
+        caeVencimiento: formatearFechaCae(data.vencimientoCae),
+        numeroFacturaReal: data.numeroComprobante
+      };
+    }catch(err){
+      alert('No se pudo conectar con ARCA — no se registró nada. ' + err.message);
+      return;
+    }
+  }
+
   const contadorRef = firestore.collection('contadores').doc('general');
   const ventaRef = firestore.collection('ventas').doc();
   const productoRefs = itemsVenta.map(it=>firestore.collection('productos').doc(it.productoId));
@@ -1308,23 +1364,16 @@ async function registrarVenta(tipoComprobante, datosFactura){
   try{
     const ventaFinal = await firestore.runTransaction(async (tx)=>{
       const contadorDoc = await tx.get(contadorRef);
-      const contadorData = contadorDoc.data() || { ultimoTicket: 0, ultimoFactura: 0 };
+      const contadorData = contadorDoc.data() || { ultimoTicket: 0 };
       const productoDocs = await Promise.all(productoRefs.map(ref=>tx.get(ref)));
 
       let numero, numeroFormateado, extra = {};
       if(tipoComprobante==='factura'){
-        numero = (contadorData.ultimoFactura || 0) + 1;
-        numeroFormateado = '0001-' + String(numero).padStart(8,'0');
-        extra = {
-          tipoFactura: datosFactura.tipo,
-          cliente: datosFactura.nombre || 'Consumidor Final',
-          cuit: datosFactura.cuit || '',
-          // CAE simulado — acá se reemplaza por la respuesta real de la
-          // Cloud Function que llama a ARCA (vía AfipSDK) cuando la conectemos
-          cae: '7' + Math.floor(10000000000000 + Math.random()*89999999999999).toString().slice(0,13),
-          caeVencimiento: new Date(Date.now()+86400000*10).toLocaleDateString('es-AR')
-        };
-        tx.set(contadorRef, { ...contadorData, ultimoFactura: numero }, { merge:true });
+        // El número y el CAE ya los definió ARCA recién arriba — acá no
+        // usamos ningún contador propio para facturas.
+        numero = extraFactura.numeroFacturaReal;
+        numeroFormateado = String(PTO_VTA_ARCA).padStart(4,'0') + '-' + String(numero).padStart(8,'0');
+        extra = extraFactura;
       } else {
         numero = (contadorData.ultimoTicket || 0) + 1;
         numeroFormateado = String(numero).padStart(6,'0');
@@ -1351,8 +1400,25 @@ async function registrarVenta(tipoComprobante, datosFactura){
     ticketActual = [];
     renderTicket();
   }catch(err){
-    alert('Error al registrar la venta: ' + err.message);
+    if(tipoComprobante==='factura' && extraFactura.cae){
+      // Esto ya es una factura REAL en ARCA aunque falle acá — nunca se
+      // puede perder el CAE, así que queda un respaldo local.
+      try{
+        const backups = JSON.parse(localStorage.getItem('facturas_pendientes_guardar')||'[]');
+        backups.push({ ...extraFactura, total, items: itemsVenta, fecha: new Date().toISOString(), errorGuardado: err.message });
+        localStorage.setItem('facturas_pendientes_guardar', JSON.stringify(backups));
+      }catch(e2){}
+      alert('¡ATENCIÓN! La factura SE EMITIÓ en ARCA (CAE: ' + extraFactura.cae + ', vence ' + extraFactura.caeVencimiento + ') pero no se pudo guardar en el sistema: ' + err.message + '\n\nQuedó un respaldo en este navegador — avisale a tu desarrollador para cargarla a mano.');
+    } else {
+      alert('Error al registrar la venta: ' + err.message);
+    }
   }
+}
+
+function formatearFechaCae(yyyymmdd){
+  const s = String(yyyymmdd || '');
+  if(s.length !== 8) return s;
+  return s.slice(6,8) + '/' + s.slice(4,6) + '/' + s.slice(0,4);
 }
 
 // ============================================================
