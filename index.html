@@ -226,7 +226,7 @@
   .filter-tab{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--cement-dim);font-size:11.5px;font-weight:600;cursor:pointer;}
   .filter-tab.active{background:var(--safety);border-color:var(--safety);color:#1B1E22;}
 
-  .prod-pick{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:8px;height:100%;overflow-y:auto;}
+  .prod-pick{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:8px;flex:1;min-height:0;overflow-y:auto;}
   .prod-pick-row{display:flex;justify-content:space-between;align-items:center;padding:10px 10px;border-bottom:1px solid var(--border);}
   .prod-pick-row:last-child{border-bottom:none;}
   .prod-pick-info{flex:1;min-width:0;}
@@ -420,7 +420,7 @@
         </button>
       </div>
       <div class="caja-grid">
-        <div>
+        <div style="display:flex;flex-direction:column;min-height:0;">
           <div class="scanner-box">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5v14M8 5v14M11 5v14M15 5v10M18 5v14M21 5v14"/></svg>
             <div style="flex:1;">
