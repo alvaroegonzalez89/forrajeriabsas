@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Forrajera Buenos Aires · Sistema de Gestión</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --graphite:#F6F4EF;
@@ -32,7 +32,7 @@
     -webkit-font-smoothing:antialiased;
   }
   h1,h2,h3,.display{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:0.3px;}
-  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:slashed-zero;}
+  .mono{font-family:'Space Mono',monospace;font-variant-numeric:slashed-zero;}
   svg{display:block;}
 
   /* ---------- LOGIN ---------- */
@@ -138,7 +138,7 @@
   .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:26px;}
   .stat-card{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
   .stat-card .label{font-size:11px;color:var(--cement-dim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;}
-  .stat-card .value{font-family:'JetBrains Mono',monospace;font-size:25px;font-weight:700;margin-top:6px;}
+  .stat-card .value{font-family:'Space Mono',monospace;font-size:25px;font-weight:700;margin-top:6px;}
   .stat-card.alert .value{color:var(--stock-crit);}
   .stat-card.ok .value{color:var(--stock-ok);}
 
@@ -155,8 +155,8 @@
   }
   .silo::after{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:var(--border);}
   .silo-fill{position:absolute;bottom:0;left:0;right:0;transition:height .5s ease;}
-  .silo-pct{font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:8px;color:var(--cement-dim);}
-  .silo-kg{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cement-dim);opacity:0.8;}
+  .silo-pct{font-family:'Space Mono',monospace;font-size:11px;margin-top:8px;color:var(--cement-dim);}
+  .silo-kg{font-family:'Space Mono',monospace;font-size:10px;color:var(--cement-dim);opacity:0.8;}
 
   /* Tables */
   .card{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px;}
@@ -181,7 +181,7 @@
   .icon-btn{background:none;border:none;color:var(--cement-dim);cursor:pointer;font-size:14px;padding:4px 6px;border-radius:5px;}
   .icon-btn:hover{color:var(--safety);background:rgba(255,107,26,0.1);}
   .prod-name-cell{font-weight:600;}
-  .prod-code{font-size:10.5px;color:var(--cement-dim);font-family:'JetBrains Mono',monospace;display:block;margin-top:1px;}
+  .prod-code{font-size:10.5px;color:var(--cement-dim);font-family:'Space Mono',monospace;display:block;margin-top:1px;}
   .table-scroll{max-height:560px;overflow-y:auto;}
 
   /* Modal */
@@ -202,7 +202,7 @@
   .radio-opt.selected{border-color:var(--safety);color:var(--safety);background:rgba(255,107,26,0.08);}
   .checkrow{display:flex;gap:18px;margin-bottom:14px;}
   .checkrow label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cement);font-weight:500;}
-  .precio-preview{background:rgba(255,107,26,0.08);border:1px solid rgba(255,107,26,0.25);border-radius:7px;padding:8px 12px;margin-bottom:13px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--safety);}
+  .precio-preview{background:rgba(255,107,26,0.08);border:1px solid rgba(255,107,26,0.25);border-radius:7px;padding:8px 12px;margin-bottom:13px;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--safety);}
   .modal-actions{display:flex;gap:10px;margin-top:18px;}
   .modal-actions .btn{flex:1;justify-content:center;}
 
@@ -217,7 +217,7 @@
   .scanner-box svg{width:26px;height:26px;color:var(--safety);flex-shrink:0;}
   .scanner-box input{
     flex:1;background:var(--graphite);border:1px solid var(--border);border-radius:8px;padding:11px 12px;
-    color:var(--cement);font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:0.5px;
+    color:var(--cement);font-family:'Space Mono',monospace;font-size:14px;letter-spacing:0.5px;
   }
   .scanner-box input:focus{outline:none;border-color:var(--safety);}
   .scanner-hint{font-size:10.5px;color:var(--cement-dim);margin-top:6px;}
@@ -231,30 +231,30 @@
   .prod-pick-row:last-child{border-bottom:none;}
   .prod-pick-info{flex:1;min-width:0;}
   .prod-pick-name{font-weight:600;font-size:13px;}
-  .prod-pick-price{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cement-dim);margin-top:1px;}
+  .prod-pick-price{font-family:'Space Mono',monospace;font-size:11px;color:var(--cement-dim);margin-top:1px;}
   .modo-btns{display:flex;gap:6px;flex-shrink:0;}
   .modo-btn{padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--cement-dim);font-size:11px;font-weight:700;cursor:pointer;}
   .modo-btn:hover{border-color:var(--safety);color:var(--safety);}
 
   .ticket{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:sticky;top:20px;}
   .ticket h3{font-size:16px;margin-bottom:4px;}
-  .ticket-num{font-family:'JetBrains Mono',monospace;color:var(--cement-dim);font-size:12px;margin-bottom:16px;}
+  .ticket-num{font-family:'Space Mono',monospace;color:var(--cement-dim);font-size:12px;margin-bottom:16px;}
   .ticket-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--border);font-size:13px;}
   .ticket-item .qty{color:var(--cement-dim);font-size:11px;}
   .ticket-item button{background:none;border:none;color:var(--stock-crit);cursor:pointer;font-size:13px;margin-left:8px;}
-  .ticket-total{display:flex;justify-content:space-between;padding-top:14px;margin-top:6px;border-top:2px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;}
+  .ticket-total{display:flex;justify-content:space-between;padding-top:14px;margin-top:6px;border-top:2px solid var(--border);font-family:'Space Mono',monospace;font-size:20px;font-weight:700;}
   .ticket-empty{color:var(--cement-dim);font-size:12.5px;text-align:center;padding:26px 10px;}
   .cobro-btns{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
   .cobro-btns .btn{width:100%;padding:13px;font-size:13.5px;justify-content:center;}
   .cobro-hint{font-size:10.5px;color:var(--cement-dim);margin-top:10px;line-height:1.5;text-align:center;}
   .cae-box{background:var(--graphite);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;}
   .cae-box .cae-label{font-size:10.5px;color:var(--cement-dim);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;}
-  .cae-box .cae-num{font-family:'JetBrains Mono',monospace;font-size:15px;margin-top:4px;color:var(--stock-ok);}
+  .cae-box .cae-num{font-family:'Space Mono',monospace;font-size:15px;margin-top:4px;color:var(--stock-ok);}
   .cae-disclaimer{font-size:10.5px;color:var(--cement-dim);margin-top:6px;line-height:1.5;}
 
   /* Proveedores */
   .prov-detail{margin-top:20px;}
-  .saldo-pill{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13.5px;}
+  .saldo-pill{font-family:'Space Mono',monospace;font-weight:700;font-size:13.5px;}
   .saldo-pos{color:var(--stock-crit);}
   .saldo-zero{color:var(--stock-ok);}
   .mov-tipo-compra{color:var(--stock-crit);font-weight:600;}
@@ -269,10 +269,10 @@
   .resumen-hoy-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
   .resumen-card{background:var(--concrete-2);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center;}
   .resumen-card .label{font-size:10px;color:var(--cement-dim);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;}
-  .resumen-card .value{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;margin-top:5px;}
+  .resumen-card .value{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;margin-top:5px;}
 
   /* Comprobante imprimible — pensado para ticketera térmica 80mm */
-  .print-ticket{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--cement);line-height:1.55;font-variant-numeric:slashed-zero;}
+  .print-ticket{font-family:'Space Mono',monospace;font-size:11.5px;color:var(--cement);line-height:1.55;font-variant-numeric:slashed-zero;}
   .print-ticket .pt-header{text-align:center;margin-bottom:10px;}
   .print-ticket .pt-header .pt-brand{font-family:'Big Shoulders Display',sans-serif;font-size:19px;font-weight:800;}
   .print-ticket .pt-header .pt-sub{font-size:10px;color:var(--cement-dim);}
@@ -664,7 +664,7 @@
     <div class="field" id="campo-fact-cuit"><label>CUIT (obligatorio en Factura A)</label><input type="text" id="fact-cuit" placeholder="30-12345678-9"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="cerrarModal('modal-factura')">Cancelar</button>
-      <button class="btn btn-primary" onclick="emitirFactura()">Emitir factura</button>
+      <button class="btn btn-primary" id="btn-emitir-factura" onclick="emitirFactura()">Emitir factura</button>
     </div>
   </div>
 </div>
@@ -1401,6 +1401,7 @@ async function registrarVenta(tipoComprobante, datosFactura){
     mostrarComprobante(ventaFinal);
     ticketActual = [];
     renderTicket();
+    return true;
   }catch(err){
     if(tipoComprobante==='factura' && extraFactura.cae){
       // Esto ya es una factura REAL en ARCA aunque falle acá — nunca se
@@ -1497,8 +1498,14 @@ function descargarComprobantePDF(){
     doc.setFont('courier', bold ? 'bold' : 'normal');
     doc.setTextColor(...color);
     const x = align==='center' ? 40 : margenX;
-    doc.text(texto, x, y, { align, maxWidth: anchoUtil });
-    y += gap;
+    // splitTextToSize calcula cuántos renglones ocupa el texto realmente —
+    // sin esto, un texto largo que se corta en 2 líneas le pisaba el
+    // renglón de abajo, porque solo avanzábamos "y" una vez.
+    const renglones = doc.splitTextToSize(texto, anchoUtil);
+    renglones.forEach(renglon=>{
+      doc.text(renglon, x, y, { align });
+      y += gap;
+    });
   }
   function raya(){
     doc.setDrawColor(200,200,200);
@@ -1915,13 +1922,22 @@ function abrirModalFactura(){
   setTipoFactura('B');
   document.getElementById('modal-factura').classList.add('active');
 }
-function emitirFactura(){
+async function emitirFactura(){
   const tipo = document.getElementById('modal-factura').dataset.tipo || 'B';
   const cuit = document.getElementById('fact-cuit').value.trim();
   if(tipo==='A' && !cuit){ alert('La Factura A requiere CUIT del cliente'); return; }
   const nombre = document.getElementById('fact-nombre').value.trim();
-  cerrarModal('modal-factura');
-  registrarVenta('factura', { tipo, nombre, cuit });
+
+  const btn = document.getElementById('btn-emitir-factura');
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Emitiendo... no cierres esta ventana';
+
+  const ok = await registrarVenta('factura', { tipo, nombre, cuit });
+
+  btn.disabled = false;
+  btn.textContent = textoOriginal;
+  if(ok) cerrarModal('modal-factura'); // si ARCA rechazó, el modal queda abierto para reintentar
 }
 
 // ============================================================
