@@ -207,7 +207,7 @@
   .modal-actions .btn{flex:1;justify-content:center;}
 
   /* Caja */
-  .caja-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;}
+  .caja-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:stretch;}
   @media(max-width:900px){.caja-grid{grid-template-columns:1fr;}}
   .scanner-box{
     background:linear-gradient(135deg, rgba(255,107,26,0.10), rgba(255,107,26,0.02));
@@ -226,7 +226,7 @@
   .filter-tab{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--cement-dim);font-size:11.5px;font-weight:600;cursor:pointer;}
   .filter-tab.active{background:var(--safety);border-color:var(--safety);color:#1B1E22;}
 
-  .prod-pick{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:8px;max-height:520px;overflow-y:auto;}
+  .prod-pick{background:var(--concrete);border:1px solid var(--border);border-radius:var(--radius);padding:8px;height:100%;overflow-y:auto;}
   .prod-pick-row{display:flex;justify-content:space-between;align-items:center;padding:10px 10px;border-bottom:1px solid var(--border);}
   .prod-pick-row:last-child{border-bottom:none;}
   .prod-pick-info{flex:1;min-width:0;}
@@ -251,6 +251,14 @@
   .cae-box .cae-label{font-size:10.5px;color:var(--cement-dim);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;}
   .cae-box .cae-num{font-family:'Space Mono',monospace;font-size:15px;margin-top:4px;color:var(--stock-ok);}
   .cae-disclaimer{font-size:10.5px;color:var(--cement-dim);margin-top:6px;line-height:1.5;}
+
+  /* Resumen de caja imprimible (A4) — oculto en pantalla, visible solo al imprimir */
+  .print-resumen{display:none;font-family:'Inter',sans-serif;color:#000;}
+  .print-resumen h2{font-family:'Big Shoulders Display',sans-serif;font-size:26px;margin-bottom:2px;}
+  .print-resumen .pr-sub{font-size:12px;color:#555;margin-bottom:18px;}
+  .print-resumen table{width:100%;border-collapse:collapse;margin-top:10px;}
+  .print-resumen th, .print-resumen td{border:1px solid #ccc;padding:8px 10px;text-align:left;font-size:12px;}
+  .print-resumen th{background:#f0f0f0;}
 
   /* Proveedores */
   .prov-detail{margin-top:20px;}
@@ -285,9 +293,10 @@
 
   @media print{
     body *{visibility:hidden;}
-    .print-ticket, .print-ticket *{visibility:visible;color:#000 !important;}
+    .print-ticket, .print-ticket *, .print-resumen, .print-resumen *{visibility:visible;color:#000 !important;}
     .print-ticket{position:absolute;top:0;left:0;width:80mm;padding:6mm;}
     .print-ticket hr{border-top:1px dashed #000;}
+    .print-resumen{position:absolute;top:0;left:0;width:100%;padding:14mm;}
     .no-print{display:none !important;}
   }
 </style>
@@ -673,20 +682,30 @@
 <div class="modal-overlay" id="modal-resumen">
   <div class="modal" style="max-width:520px;">
     <h3>Resumen de caja</h3>
-    <div class="section-label" style="margin-top:4px;">Hoy</div>
+    <div class="field" style="max-width:220px;">
+      <label>Ver resumen del día</label>
+      <input type="date" id="resumen-fecha" onchange="cargarResumenDia()">
+    </div>
+    <div class="section-label" style="margin-top:10px;" id="resumen-dia-label">Hoy</div>
     <div class="resumen-hoy-grid" id="resumen-hoy"></div>
+    <div id="resumen-dia-status" style="font-size:12px;color:var(--cement-dim);margin-top:8px;"></div>
+
     <div class="section-label" style="margin-top:20px;">Últimos 30 días</div>
-    <div class="table-scroll" style="max-height:260px;">
+    <div class="table-scroll" style="max-height:220px;">
       <table>
         <thead><tr><th>Día</th><th>Interno</th><th>Facturado</th><th>Total</th></tr></thead>
         <tbody id="resumen-mensual-tbody"></tbody>
       </table>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="cerrarModal('modal-resumen')" style="width:100%;">Cerrar</button>
+      <button class="btn btn-outline" onclick="cerrarModal('modal-resumen')">Cerrar</button>
+      <button class="btn btn-primary" onclick="imprimirResumenDia()">🖨 Imprimir este día</button>
     </div>
   </div>
 </div>
+
+<!-- Bloque imprimible del resumen — invisible en pantalla, solo aparece al imprimir -->
+<div class="print-resumen" id="print-resumen-content"></div>
 
 <!-- ============ MODAL COMPROBANTE IMPRIMIBLE ============ -->
 <div class="modal-overlay" id="modal-comprobante">
@@ -1556,21 +1575,16 @@ function descargarComprobantePDF(){
 }
 
 // ============================================================
-// RESUMEN DE CAJA — diario y últimos 30 días
+// RESUMEN DE CAJA — un día puntual (elegible) + últimos 30 días
 // ============================================================
+let resumenDiaActual = null; // para poder imprimirlo después de cargarlo
+
 function abrirResumen(){
-  const hoy = new Date().toDateString();
-  const ventasHoy = db.ventas.filter(v=>new Date(v.fecha).toDateString()===hoy);
-  const totalInterno = ventasHoy.filter(v=>v.tipoComprobante==='interno').reduce((a,v)=>a+v.total,0);
-  const totalFacturado = ventasHoy.filter(v=>v.tipoComprobante==='factura').reduce((a,v)=>a+v.total,0);
+  const hoy = new Date();
+  document.getElementById('resumen-fecha').value = hoy.toISOString().slice(0,10);
+  cargarResumenDia();
 
-  document.getElementById('resumen-hoy').innerHTML = `
-    <div class="resumen-card"><div class="label">Interno</div><div class="value">${money(totalInterno)}</div></div>
-    <div class="resumen-card"><div class="label">Facturado</div><div class="value">${money(totalFacturado)}</div></div>
-    <div class="resumen-card"><div class="label">Total día</div><div class="value">${money(totalInterno+totalFacturado)}</div></div>
-  `;
-
-  // Agrupar los últimos 30 días
+  // Últimos 30 días — overview rápido desde la caché en memoria (30 días)
   const dias = [];
   for(let i=0;i<30;i++){
     const d = new Date(); d.setDate(d.getDate()-i);
@@ -1589,9 +1603,79 @@ function abrirResumen(){
       <td class="mono">${money(f.interno)}</td>
       <td class="mono">${money(f.facturado)}</td>
       <td class="mono" style="font-weight:700;">${money(f.total)}</td>
-    </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--cement-dim);">Todavía no hay ventas registradas este mes en la demo</td></tr>';
+    </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--cement-dim);">Todavía no hay ventas registradas este mes</td></tr>';
 
   document.getElementById('modal-resumen').classList.add('active');
+}
+
+// Consulta directa a Firestore para el día elegido — así funciona para
+// cualquier fecha del historial, no solo para los últimos 30 días que
+// quedan en memoria.
+async function cargarResumenDia(){
+  const fechaInput = document.getElementById('resumen-fecha').value; // "2026-08-25"
+  if(!fechaInput) return;
+  const inicio = new Date(fechaInput + 'T00:00:00');
+  const fin = new Date(inicio); fin.setDate(fin.getDate()+1);
+  const statusEl = document.getElementById('resumen-dia-status');
+  const labelEl = document.getElementById('resumen-dia-label');
+
+  const hoyStr = new Date().toISOString().slice(0,10);
+  labelEl.textContent = fechaInput===hoyStr ? 'Hoy' : inicio.toLocaleDateString('es-AR',{weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'});
+  statusEl.textContent = 'Cargando...';
+
+  try{
+    const snap = await firestore.collection('ventas')
+      .where('fecha', '>=', inicio.toISOString())
+      .where('fecha', '<', fin.toISOString())
+      .get();
+    const ventasDia = snap.docs.map(d=>d.data());
+    const totalInterno = ventasDia.filter(v=>v.tipoComprobante==='interno').reduce((a,v)=>a+v.total,0);
+    const totalFacturado = ventasDia.filter(v=>v.tipoComprobante==='factura').reduce((a,v)=>a+v.total,0);
+
+    resumenDiaActual = {
+      fechaTxt: inicio.toLocaleDateString('es-AR'),
+      totalInterno, totalFacturado,
+      ventas: ventasDia.sort((a,b)=> new Date(a.fecha)-new Date(b.fecha))
+    };
+
+    document.getElementById('resumen-hoy').innerHTML = `
+      <div class="resumen-card"><div class="label">Interno</div><div class="value">${money(totalInterno)}</div></div>
+      <div class="resumen-card"><div class="label">Facturado</div><div class="value">${money(totalFacturado)}</div></div>
+      <div class="resumen-card"><div class="label">Total día</div><div class="value">${money(totalInterno+totalFacturado)}</div></div>
+    `;
+    statusEl.textContent = ventasDia.length ? `${ventasDia.length} comprobante${ventasDia.length>1?'s':''} ese día` : 'Sin ventas registradas ese día';
+  }catch(err){
+    statusEl.textContent = 'Error al cargar ese día: ' + err.message;
+  }
+}
+
+// Arma el resumen del día elegido en formato imprimible (A4) y lo manda
+// a impresión — mismo mecanismo que el ticket, pero a página completa.
+function imprimirResumenDia(){
+  if(!resumenDiaActual){ alert('Elegí un día primero'); return; }
+  const r = resumenDiaActual;
+  const filasVentas = r.ventas.map(v=>`
+    <tr>
+      <td>${new Date(v.fecha).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</td>
+      <td>${v.tipoComprobante==='factura' ? 'Factura '+v.tipoFactura : 'Comprobante interno'}</td>
+      <td>${v.numeroFormateado}</td>
+      <td>${money(v.total)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Sin comprobantes este día</td></tr>';
+
+  document.getElementById('print-resumen-content').innerHTML = `
+    <h2>${NEGOCIO.nombreFantasia}</h2>
+    <div class="pr-sub">${NEGOCIO.razonSocial} — CUIT ${NEGOCIO.cuit}<br>Resumen de caja — ${r.fechaTxt}</div>
+    <table>
+      <tr><th>Comprobante interno</th><td>${money(r.totalInterno)}</td></tr>
+      <tr><th>Facturado (ARCA)</th><td>${money(r.totalFacturado)}</td></tr>
+      <tr><th>Total del día</th><td><b>${money(r.totalInterno + r.totalFacturado)}</b></td></tr>
+    </table>
+    <table style="margin-top:20px;">
+      <thead><tr><th>Hora</th><th>Tipo</th><th>N°</th><th>Total</th></tr></thead>
+      <tbody>${filasVentas}</tbody>
+    </table>
+  `;
+  window.print();
 }
 
 // ============================================================
