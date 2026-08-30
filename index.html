@@ -435,9 +435,12 @@
               <div class="scanner-hint">La ticketera lee el código y carga el producto automáticamente al presionar Enter.</div>
             </div>
           </div>
-          <div class="search-box" style="width:100%;margin-bottom:12px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input type="text" id="caja-search" placeholder="Buscar producto por nombre..." oninput="renderCaja()">
+          <div style="display:flex;gap:8px;margin-bottom:12px;">
+            <div class="search-box" style="width:100%;margin-bottom:0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input type="text" id="caja-search" placeholder="Buscar producto por nombre..." oninput="renderCaja()">
+            </div>
+            <button class="btn btn-outline" style="flex-shrink:0;" onclick="agregarVarios()" title="Artículo sin cargar en el sistema — solo precio">+ Varios</button>
           </div>
           <div class="prod-filter-tabs" id="caja-cat-tabs"></div>
           <div class="prod-pick" id="caja-productos"></div>
@@ -1270,6 +1273,30 @@ function agregarUnidad(productoId){
   renderTicket();
 }
 
+// "Varios" — para artículos que todavía no están cargados en el sistema
+// (sin código de barras, recién llegados, lo que sea): un renglón suelto
+// con nombre libre y precio a mano. No tiene productoId, así que no
+// descuenta stock de ningún producto — es solo un cargo manual al ticket.
+function agregarVarios(){
+  const descripcion = prompt('Descripción del artículo (para el ticket):', 'Varios');
+  if(descripcion===null) return;
+  const nombre = descripcion.trim() || 'Varios';
+  const precioStr = prompt(`Precio de "${nombre}" ($):`, '');
+  if(precioStr===null) return;
+  const precio = Number(precioStr);
+  if(!precio || precio<=0){ alert('Precio inválido'); return; }
+  ticketActual.push({
+    productoId: null,
+    nombre,
+    modo: 'varios',
+    cantidad: 1,
+    precioUnit: precio,
+    subtotal: precio,
+    kgADescontar: 0
+  });
+  renderTicket();
+}
+
 function agregarAlTicket(productoId, modo){
   const pr = db.productos.find(x=>x.id===productoId);
   let cantidad, precioUnit;
@@ -1309,10 +1336,11 @@ function renderTicket(){
     cont.innerHTML = ticketActual.map((it,idx)=>{
       const cantidadTxt = it.modo==='bolsa' ? it.cantidad+' bolsa'+(it.cantidad>1?'s':'')
                         : it.modo==='unidad' ? it.cantidad+' un.'
+                        : it.modo==='varios' ? ''
                         : it.cantidad+' kg';
       return `
       <div class="ticket-item">
-        <div>${it.nombre} <span class="qty">(${cantidadTxt})</span></div>
+        <div>${it.nombre}${cantidadTxt ? ' <span class="qty">('+cantidadTxt+')</span>' : ' <span class="qty">(varios)</span>'}</div>
         <div class="mono">${money(it.subtotal)}<button onclick="quitarDelTicket(${idx})" title="Quitar">✕</button></div>
       </div>`;
     }).join('');
@@ -1387,13 +1415,15 @@ async function registrarVenta(tipoComprobante, datosFactura){
 
   const contadorRef = firestore.collection('contadores').doc('general');
   const ventaRef = firestore.collection('ventas').doc();
-  const productoRefs = itemsVenta.map(it=>firestore.collection('productos').doc(it.productoId));
+  // Los ítems "varios" no tienen productoId — no hay nada que leer ni
+  // descontar de stock para ellos, así que su referencia queda null.
+  const productoRefs = itemsVenta.map(it=> it.productoId ? firestore.collection('productos').doc(it.productoId) : null);
 
   try{
     const ventaFinal = await firestore.runTransaction(async (tx)=>{
       const contadorDoc = await tx.get(contadorRef);
       const contadorData = contadorDoc.data() || { ultimoTicket: 0 };
-      const productoDocs = await Promise.all(productoRefs.map(ref=>tx.get(ref)));
+      const productoDocs = await Promise.all(productoRefs.map(ref=> ref ? tx.get(ref) : Promise.resolve(null)));
 
       let numero, numeroFormateado, extra = {};
       if(tipoComprobante==='factura'){
@@ -1409,7 +1439,7 @@ async function registrarVenta(tipoComprobante, datosFactura){
       }
 
       productoDocs.forEach((docSnap, idx)=>{
-        if(!docSnap.exists) return;
+        if(!docSnap || !docSnap.exists) return; // ítem "varios" o producto borrado — no toca stock
         const it = itemsVenta[idx];
         const data = docSnap.data();
         if(it.modo==='unidad'){
@@ -1464,6 +1494,7 @@ function mostrarComprobante(venta){
   const itemsHtml = venta.items.map(it=>{
     const cantidadTxt = it.modo==='bolsa' ? it.cantidad+' bolsa'+(it.cantidad>1?'s':'')
                       : it.modo==='unidad' ? it.cantidad+' un.'
+                      : it.modo==='varios' ? 'varios'
                       : it.cantidad+' kg';
     return `<div class="pt-item"><span>${it.nombre} (${cantidadTxt})</span><span>${money(it.subtotal)}</span></div>`;
   }).join('');
@@ -1556,6 +1587,7 @@ function descargarComprobantePDF(){
   venta.items.forEach(it=>{
     const cantidadTxt = it.modo==='bolsa' ? it.cantidad+' bolsa'+(it.cantidad>1?'s':'')
                       : it.modo==='unidad' ? it.cantidad+' un.'
+                      : it.modo==='varios' ? 'varios'
                       : it.cantidad+' kg';
     linea(`${it.nombre} (${cantidadTxt})`, {size:8, gap:3.6});
     linea(money(it.subtotal), {size:8, align:'right', gap:5});
