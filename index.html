@@ -495,7 +495,7 @@
           <button class="btn btn-outline btn-sm" onclick="abrirModalMovimiento()">+ Movimiento</button>
         </div>
         <table>
-          <thead><tr><th>Fecha</th><th>Tipo</th><th>Remito/Factura</th><th>N° Comprobante</th><th>Monto</th><th>Saldo resultante</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Remito/Factura</th><th>N° Comprobante</th><th>Monto</th><th>Saldo resultante</th><th></th></tr></thead>
           <tbody id="tabla-movimientos"></tbody>
         </table>
       </div>
@@ -782,6 +782,21 @@
   </div>
 </div>
 
+<!-- ============ MODAL EDITAR MOVIMIENTO PROVEEDOR ============ -->
+<div class="modal-overlay" id="modal-editar-movimiento">
+  <div class="modal">
+    <h3>Editar movimiento</h3>
+    <p style="font-size:12px;color:var(--cement-dim);margin-bottom:14px;" id="edit-mov-info"></p>
+    <div class="field"><label>Monto ($)</label><input type="number" id="edit-mov-monto"></div>
+    <div class="field"><label>N° comprobante / referencia</label><input type="text" id="edit-mov-comprobante"></div>
+    <p style="font-size:11px;color:var(--cement-dim);">El tipo (compra/pago) y Remito/Factura no se pueden cambiar acá — si se equivocaron en eso, es más prolijo eliminar este movimiento y cargarlo de nuevo bien.</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cerrarModal('modal-editar-movimiento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEdicionMovimiento()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
@@ -833,6 +848,7 @@ auth.signOut();
 // ============================================================
 let db = { productos: [], proveedores: [], ventas: [], gastos: [], ultimoTicket: 0, ultimoFactura: 0, totalProveedoresReal: 57 };
 let proveedorSeleccionado = null;
+let movimientoEditando = null; // { id, tipo, esFactura } — el que está por editarse
 let ticketActual = [];
 let filtroStockCat = 'todas';
 let filtroCajaCat = 'todas';
@@ -2128,12 +2144,13 @@ async function verProveedor(id){
   document.getElementById('prov-detail').style.display = 'block';
   document.getElementById('prov-detail-nombre').textContent = pr.nombre + ' — Saldo: ' + money(pr.saldo);
   const tbody = document.getElementById('tabla-movimientos');
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--cement-dim);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--cement-dim);">Cargando...</td></tr>';
   try{
     const snap = await firestore.collection('proveedores').doc(id).collection('movimientos').orderBy('fecha','desc').get();
-    const movimientos = snap.docs.map(d=>d.data());
+    const movimientos = snap.docs.map(d=>({id:d.id, ...d.data()}));
     tbody.innerHTML = movimientos.map(m=>{
       const comprobanteTipo = m.tipo==='compra' ? (m.esFactura ? 'Factura' : 'Remito') : '—';
+      const comprobanteEscapado = (m.comprobante||'').replace(/'/g, "\\'");
       return `
       <tr>
         <td class="mono">${new Date(m.fecha).toLocaleDateString('es-AR')}</td>
@@ -2142,10 +2159,14 @@ async function verProveedor(id){
         <td>${m.comprobante||'—'}</td>
         <td class="mono">${m.tipo==='compra'?'+':'-'}${money(m.monto)}</td>
         <td class="mono">${money(m.saldoResultante)}</td>
+        <td>
+          <button class="icon-btn" onclick="abrirEditarMovimiento('${m.id}','${m.tipo}',${m.monto},'${comprobanteEscapado}',${!!m.esFactura})" title="Editar">✎</button>
+          <button class="icon-btn" onclick="eliminarMovimiento('${m.id}')" title="Eliminar">✕</button>
+        </td>
       </tr>`;
-    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--cement-dim);">Sin movimientos</td></tr>';
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--cement-dim);">Sin movimientos</td></tr>';
   }catch(err){
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--stock-crit);">Error al cargar movimientos: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--stock-crit);">Error al cargar movimientos: ${err.message}</td></tr>`;
   }
   document.getElementById('prov-detail').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -2218,6 +2239,85 @@ async function guardarMovimiento(){
     verProveedor(proveedorSeleccionado);
   }catch(err){
     alert('Error al registrar el movimiento: ' + err.message);
+  }
+}
+
+// ============================================================
+// EDITAR / ELIMINAR UN MOVIMIENTO YA CARGADO — para corregir errores
+// (ej: se cargó un remito al proveedor equivocado, monto mal tipeado)
+// ============================================================
+
+function abrirEditarMovimiento(movId, tipo, monto, comprobante, esFactura){
+  movimientoEditando = { id: movId, tipo, esFactura };
+  document.getElementById('edit-mov-monto').value = monto;
+  document.getElementById('edit-mov-comprobante').value = comprobante;
+  document.getElementById('edit-mov-info').textContent =
+    `${tipo==='compra' ? 'Compra' : 'Pago'}${tipo==='compra' ? (esFactura ? ' — Factura' : ' — Remito') : ''}`;
+  document.getElementById('modal-editar-movimiento').classList.add('active');
+}
+
+// El saldo del proveedor se ajusta por la DIFERENCIA entre el monto viejo
+// y el nuevo — así el saldo total queda correcto sin importar en qué
+// orden estén los movimientos. (El "saldo resultante" que quedó grabado
+// en movimientos posteriores no se recalcula, es solo un dato histórico
+// de referencia — el saldo real y actual del proveedor sí queda bien.)
+async function guardarEdicionMovimiento(){
+  const nuevoMonto = Number(document.getElementById('edit-mov-monto').value);
+  if(!nuevoMonto || nuevoMonto<=0){ alert('Ingresá un monto válido'); return; }
+  const nuevoComprobante = document.getElementById('edit-mov-comprobante').value.trim();
+  const { id: movId, tipo, esFactura } = movimientoEditando;
+  const provRef = firestore.collection('proveedores').doc(proveedorSeleccionado);
+  const movRef = provRef.collection('movimientos').doc(movId);
+
+  try{
+    await firestore.runTransaction(async (tx)=>{
+      const movDoc = await tx.get(movRef);
+      if(!movDoc.exists) throw new Error('Este movimiento ya no existe (¿lo borraron desde otro dispositivo?)');
+      const provDoc = await tx.get(provRef);
+      if(!provDoc.exists) throw new Error('El proveedor ya no existe');
+
+      const montoViejo = movDoc.data().monto;
+      const saldoActual = provDoc.data().saldo || 0;
+      const efectoViejo = tipo==='compra' ? montoViejo : -montoViejo;
+      const efectoNuevo = tipo==='compra' ? nuevoMonto : -nuevoMonto;
+      const nuevoSaldo = Math.max(0, saldoActual - efectoViejo + efectoNuevo);
+      const nuevoIva = (tipo==='compra' && esFactura) ? Math.round(nuevoMonto * 0.21) : 0;
+
+      tx.update(provRef, { saldo: nuevoSaldo });
+      tx.update(movRef, { monto: nuevoMonto, comprobante: nuevoComprobante, iva: nuevoIva, saldoResultante: nuevoSaldo });
+    });
+    cerrarModal('modal-editar-movimiento');
+    verProveedor(proveedorSeleccionado);
+    renderDashboard();
+  }catch(err){
+    alert('Error al editar el movimiento: ' + err.message);
+  }
+}
+
+async function eliminarMovimiento(movId){
+  if(!confirm('¿Eliminar este movimiento? El saldo del proveedor se va a ajustar automáticamente. Esta acción no se puede deshacer.')) return;
+  const provRef = firestore.collection('proveedores').doc(proveedorSeleccionado);
+  const movRef = provRef.collection('movimientos').doc(movId);
+
+  try{
+    await firestore.runTransaction(async (tx)=>{
+      const movDoc = await tx.get(movRef);
+      if(!movDoc.exists) return; // ya no existe — nada para revertir
+      const provDoc = await tx.get(provRef);
+      if(!provDoc.exists) throw new Error('El proveedor ya no existe');
+
+      const m = movDoc.data();
+      const saldoActual = provDoc.data().saldo || 0;
+      const efecto = m.tipo==='compra' ? m.monto : -m.monto;
+      const nuevoSaldo = Math.max(0, saldoActual - efecto);
+
+      tx.update(provRef, { saldo: nuevoSaldo });
+      tx.delete(movRef);
+    });
+    verProveedor(proveedorSeleccionado);
+    renderDashboard();
+  }catch(err){
+    alert('Error al eliminar el movimiento: ' + err.message);
   }
 }
 
