@@ -516,7 +516,7 @@
         <div class="section-label">IVA Débito — ventas facturadas del mes</div>
         <div class="table-scroll" style="max-height:280px;">
           <table>
-            <thead><tr><th>Fecha</th><th>Comprobante</th><th>Total</th><th>IVA (21%)</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Comprobante</th><th>Total</th><th>IVA discriminado</th></tr></thead>
             <tbody id="tabla-iva-ventas"></tbody>
           </table>
         </div>
@@ -526,7 +526,7 @@
         <div class="section-label">IVA Crédito — compras con factura del mes</div>
         <div class="table-scroll" style="max-height:280px;">
           <table>
-            <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Monto</th><th>IVA (21%)</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Monto</th><th>IVA discriminado</th></tr></thead>
             <tbody id="tabla-iva-compras"></tbody>
           </table>
         </div>
@@ -539,7 +539,7 @@
         <div class="section-label">IVA Crédito — gastos con factura del mes</div>
         <div class="table-scroll" style="max-height:280px;">
           <table>
-            <thead><tr><th>Fecha</th><th>Concepto</th><th>Comprobante</th><th>Monto</th><th>IVA (21%)</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Comprobante</th><th>Monto</th><th>IVA discriminado</th></tr></thead>
             <tbody id="tabla-iva-gastos"></tbody>
           </table>
         </div>
@@ -991,6 +991,13 @@ function renderTodo(){
 // HELPERS
 // ============================================================
 function money(n){ return '$' + Number(n||0).toLocaleString('es-AR'); }
+
+// IVA discriminado de un monto que YA incluye IVA (no es 21% flat sobre
+// el total — es la diferencia entre el total y el total dividido 1.21).
+// Ej: $121 con IVA incluido → neto $100, IVA $21 (no $121×0.21=$25,41).
+function calcularIVADiscriminado(montoConIva){
+  return Math.round((montoConIva - montoConIva/1.21) * 100) / 100;
+}
 const CAT_LABEL = {perros:'Perros', gatos:'Gatos', granja:'Aves / Granja', accesorios:'Accesorios', ferreteria:'Ferretería', lubricantes:'Lubricantes', limpieza:'Limpieza', almacen:'Almacén'};
 
 function nivelStock(prod){
@@ -1759,7 +1766,7 @@ function previewIvaGasto(){
   const preview = document.getElementById('preview-iva-gasto');
   if(esFactura && monto>0){
     preview.style.display = 'block';
-    preview.textContent = 'IVA crédito fiscal (21%): ' + money(Math.round(monto*0.21));
+    preview.textContent = 'IVA crédito fiscal (discriminado): ' + money(calcularIVADiscriminado(monto));
   } else {
     preview.style.display = 'none';
   }
@@ -1780,7 +1787,7 @@ async function guardarGasto(){
   const fechaInput = document.getElementById('gasto-fecha').value; // "2026-08-20"
   const fecha = fechaInput ? new Date(fechaInput + 'T12:00:00').toISOString() : new Date().toISOString();
   const esFactura = document.getElementById('modal-gasto').dataset.comprobanteTipo !== 'remito';
-  const iva = esFactura ? Math.round(monto * 0.21) : 0;
+  const iva = esFactura ? calcularIVADiscriminado(monto) : 0;
   try{
     await firestore.collection('gastos').add({
       concepto, monto, fecha,
@@ -1838,14 +1845,14 @@ async function renderIVA(){
   // IVA Débito: ventas facturadas del mes. db.ventas ya tiene los
   // últimos 30 días cargados por el listener general, alcanza para "este mes".
   const ventasFacturadas = db.ventas.filter(v=>v.tipoComprobante==='factura' && v.fecha>=inicioISO && v.fecha<finISO);
-  const ivaDebito = ventasFacturadas.reduce((a,v)=> a + Math.round(v.total*0.21), 0);
+  const ivaDebito = ventasFacturadas.reduce((a,v)=> a + calcularIVADiscriminado(v.total), 0);
 
   document.getElementById('tabla-iva-ventas').innerHTML = ventasFacturadas.map(v=>`
     <tr>
       <td class="mono">${new Date(v.fecha).toLocaleDateString('es-AR')}</td>
       <td>${v.numeroFormateado}</td>
       <td class="mono">${money(v.total)}</td>
-      <td class="mono">${money(Math.round(v.total*0.21))}</td>
+      <td class="mono">${money(calcularIVADiscriminado(v.total))}</td>
     </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--cement-dim);">Sin facturas este mes</td></tr>';
 
   // IVA Crédito: hay que ir a buscar a la subcolección de movimientos de
@@ -1870,7 +1877,7 @@ async function renderIVA(){
     document.getElementById('iva-status').textContent = 'Error al buscar compras: ' + err.message;
   }
   comprasFactura.sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
-  const ivaCreditoCompras = comprasFactura.reduce((a,m)=> a + (m.iva || Math.round(m.monto*0.21)), 0);
+  const ivaCreditoCompras = comprasFactura.reduce((a,m)=> a + (m.iva || calcularIVADiscriminado(m.monto)), 0);
 
   document.getElementById('tabla-iva-compras').innerHTML = comprasFactura.map(m=>`
     <tr>
@@ -1878,13 +1885,13 @@ async function renderIVA(){
       <td>${m.proveedor}</td>
       <td>${m.comprobante||'—'}</td>
       <td class="mono">${money(m.monto)}</td>
-      <td class="mono">${money(m.iva || Math.round(m.monto*0.21))}</td>
+      <td class="mono">${money(m.iva || calcularIVADiscriminado(m.monto))}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Sin compras facturadas este mes</td></tr>';
 
   // Gastos generales facturados del mes — segunda fuente de IVA crédito,
   // ya está en memoria (mismo listener de 30 días que la página Gastos)
   const gastosFactura = db.gastos.filter(g=> g.esFactura && g.fecha>=inicioISO && g.fecha<finISO);
-  const ivaCreditoGastos = gastosFactura.reduce((a,g)=> a + (g.iva || Math.round(g.monto*0.21)), 0);
+  const ivaCreditoGastos = gastosFactura.reduce((a,g)=> a + (g.iva || calcularIVADiscriminado(g.monto)), 0);
 
   document.getElementById('tabla-iva-gastos').innerHTML = gastosFactura.map(g=>`
     <tr>
@@ -1892,7 +1899,7 @@ async function renderIVA(){
       <td>${g.concepto}</td>
       <td>${g.comprobante||'—'}</td>
       <td class="mono">${money(g.monto)}</td>
-      <td class="mono">${money(g.iva || Math.round(g.monto*0.21))}</td>
+      <td class="mono">${money(g.iva || calcularIVADiscriminado(g.monto))}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--cement-dim);">Sin gastos facturados este mes</td></tr>';
 
   const ivaCredito = ivaCreditoCompras + ivaCreditoGastos;
@@ -2008,14 +2015,14 @@ async function generarResumenContable(){
       'Tipo': g.esFactura ? 'Factura' : 'Remito',
       'N° Comprobante': g.comprobante || '',
       'Monto': g.monto,
-      'IVA (21%)': g.esFactura ? (g.iva || Math.round(g.monto*0.21)) : 0
+      'IVA (discriminado)': g.esFactura ? (g.iva || calcularIVADiscriminado(g.monto)) : 0
     }));
     const totalGastosMes = gastosDelMes.reduce((a,g)=>a+g.monto,0);
-    const ivaCreditoGastosMes = gastosDelMes.filter(g=>g.esFactura).reduce((a,g)=>a+(g.iva||Math.round(g.monto*0.21)),0);
+    const ivaCreditoGastosMes = gastosDelMes.filter(g=>g.esFactura).reduce((a,g)=>a+(g.iva||calcularIVADiscriminado(g.monto)),0);
 
     // 5) Hoja de resumen general
     const totalFacturasVentaMes = ventasDelMes.filter(v=>v.tipoComprobante==='factura').length;
-    const ivaDebitoMes = ventasDelMes.filter(v=>v.tipoComprobante==='factura').reduce((a,v)=>a+Math.round(v.total*0.21),0);
+    const ivaDebitoMes = ventasDelMes.filter(v=>v.tipoComprobante==='factura').reduce((a,v)=>a+calcularIVADiscriminado(v.total),0);
     const filasResumen = [
       { 'Concepto': `Período`, 'Valor': nombreMes },
       { 'Concepto': 'Ventas totales del mes', 'Valor': totalVentasMes },
@@ -2200,7 +2207,7 @@ function previewIvaMov(){
   const preview = document.getElementById('preview-iva-mov');
   if(esCompra && esFactura && monto>0){
     preview.style.display = 'block';
-    preview.textContent = 'IVA crédito fiscal (21%): ' + money(Math.round(monto*0.21));
+    preview.textContent = 'IVA crédito fiscal (discriminado): ' + money(calcularIVADiscriminado(monto));
   } else {
     preview.style.display = 'none';
   }
@@ -2217,7 +2224,7 @@ async function guardarMovimiento(){
   // Solo aplica a compras: si es "remito" no suma IVA crédito, si es
   // "factura" sí. Los pagos nunca generan IVA.
   const esFactura = tipo==='compra' && document.getElementById('modal-movimiento').dataset.comprobanteTipo !== 'remito';
-  const iva = esFactura ? Math.round(monto * 0.21) : 0;
+  const iva = esFactura ? calcularIVADiscriminado(monto) : 0;
   const provRef = firestore.collection('proveedores').doc(proveedorSeleccionado);
   const movRef = provRef.collection('movimientos').doc();
 
@@ -2281,7 +2288,7 @@ async function guardarEdicionMovimiento(){
       const efectoViejo = tipo==='compra' ? montoViejo : -montoViejo;
       const efectoNuevo = tipo==='compra' ? nuevoMonto : -nuevoMonto;
       const nuevoSaldo = Math.max(0, saldoActual - efectoViejo + efectoNuevo);
-      const nuevoIva = (tipo==='compra' && esFactura) ? Math.round(nuevoMonto * 0.21) : 0;
+      const nuevoIva = (tipo==='compra' && esFactura) ? calcularIVADiscriminado(nuevoMonto) : 0;
 
       tx.update(provRef, { saldo: nuevoSaldo });
       tx.update(movRef, { monto: nuevoMonto, comprobante: nuevoComprobante, iva: nuevoIva, saldoResultante: nuevoSaldo });
