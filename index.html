@@ -477,6 +477,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
             <input type="text" id="prov-search" placeholder="Buscar proveedor o CUIT..." oninput="renderProveedores()">
           </div>
+          <select id="prov-orden" class="sort-select" onchange="renderProveedores()">
+            <option value="nombre-asc">Nombre (A-Z)</option>
+            <option value="nombre-desc">Nombre (Z-A)</option>
+            <option value="saldo-desc">Saldo (mayor a menor)</option>
+            <option value="saldo-asc">Saldo (menor a mayor)</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalProveedor()">+ Nuevo proveedor</button>
         </div>
       </div>
@@ -492,7 +498,10 @@
       <div class="card prov-detail" id="prov-detail" style="display:none;">
         <div class="page-header" style="margin-bottom:14px;">
           <h3 id="prov-detail-nombre" style="font-size:18px;"></h3>
-          <button class="btn btn-outline btn-sm" onclick="abrirModalMovimiento()">+ Movimiento</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="recalcularYRefrescar()" title="Recalcula el saldo resultante de todos los movimientos de esta cuenta, por si quedó desincronizado">↻ Recalcular saldos</button>
+            <button class="btn btn-outline btn-sm" onclick="abrirModalMovimiento()">+ Movimiento</button>
+          </div>
         </div>
         <table>
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Remito/Factura</th><th>N° Comprobante</th><th>Monto</th><th>Saldo resultante</th><th></th></tr></thead>
@@ -2128,6 +2137,14 @@ function renderProveedores(){
   let lista = db.proveedores;
   if(q) lista = lista.filter(pr => pr.nombre.toLowerCase().includes(q) || (pr.cuit||'').includes(q));
 
+  const orden = document.getElementById('prov-orden').value;
+  lista = lista.slice().sort((a,b)=>{
+    if(orden==='saldo-desc') return (b.saldo||0) - (a.saldo||0);
+    if(orden==='saldo-asc') return (a.saldo||0) - (b.saldo||0);
+    if(orden==='nombre-desc') return b.nombre.localeCompare(a.nombre, 'es');
+    return a.nombre.localeCompare(b.nombre, 'es'); // nombre-asc, default
+  });
+
   document.getElementById('prov-count-sub').textContent =
     `${lista.length} de ${db.proveedores.length} proveedores`;
 
@@ -2213,9 +2230,6 @@ function previewIvaMov(){
   }
 }
 
-// El saldo del proveedor y el nuevo movimiento se escriben en la misma
-// transacción: si dos personas cargan un movimiento del mismo proveedor
-// al mismo tiempo, no se pisa el saldo resultante.
 async function guardarMovimiento(){
   const tipo = document.getElementById('mov-tipo').value;
   const monto = Number(document.getElementById('mov-monto').value);
@@ -2226,22 +2240,18 @@ async function guardarMovimiento(){
   const esFactura = tipo==='compra' && document.getElementById('modal-movimiento').dataset.comprobanteTipo !== 'remito';
   const iva = esFactura ? calcularIVADiscriminado(monto) : 0;
   const provRef = firestore.collection('proveedores').doc(proveedorSeleccionado);
-  const movRef = provRef.collection('movimientos').doc();
 
   try{
-    await firestore.runTransaction(async (tx)=>{
-      const provDoc = await tx.get(provRef);
-      if(!provDoc.exists) throw new Error('El proveedor ya no existe');
-      const saldoActual = provDoc.data().saldo || 0;
-      const nuevoSaldo = tipo==='compra' ? saldoActual + monto : Math.max(0, saldoActual - monto);
-      tx.update(provRef, { saldo: nuevoSaldo });
-      tx.set(movRef, {
-        fecha: new Date().toISOString(),
-        tipo, monto, comprobante,
-        esFactura, iva,
-        saldoResultante: nuevoSaldo
-      });
+    await provRef.collection('movimientos').add({
+      fecha: new Date().toISOString(),
+      tipo, monto, comprobante,
+      esFactura, iva,
+      saldoResultante: 0 // provisorio — recalcularSaldosProveedor lo deja correcto abajo
     });
+    // Recalcula toda la cadena en lugar de sumar/restar a mano: así el
+    // saldo resultante de la tabla queda siempre consistente con el saldo
+    // real del proveedor, sin importar el orden de alta/edición/borrado.
+    await recalcularSaldosProveedor(proveedorSeleccionado);
     cerrarModal('modal-movimiento');
     verProveedor(proveedorSeleccionado);
   }catch(err){
@@ -2263,11 +2273,26 @@ function abrirEditarMovimiento(movId, tipo, monto, comprobante, esFactura){
   document.getElementById('modal-editar-movimiento').classList.add('active');
 }
 
-// El saldo del proveedor se ajusta por la DIFERENCIA entre el monto viejo
-// y el nuevo — así el saldo total queda correcto sin importar en qué
-// orden estén los movimientos. (El "saldo resultante" que quedó grabado
-// en movimientos posteriores no se recalcula, es solo un dato histórico
-// de referencia — el saldo real y actual del proveedor sí queda bien.)
+// Recalcula en cascada el "saldo resultante" de TODOS los movimientos de
+// un proveedor, en orden cronológico, y deja el saldo del proveedor
+// alineado con el último valor de la cadena. Se llama siempre después de
+// borrar o editar un movimiento, porque cualquier cambio en el medio de
+// la cadena corre el saldo resultante de todos los movimientos
+// posteriores (antes esos quedaban con un valor viejo, "pisado").
+async function recalcularSaldosProveedor(proveedorId){
+  const provRef = firestore.collection('proveedores').doc(proveedorId);
+  const snap = await provRef.collection('movimientos').orderBy('fecha','asc').get();
+  const batch = firestore.batch();
+  let saldo = 0;
+  snap.docs.forEach(doc=>{
+    const m = doc.data();
+    saldo = m.tipo==='compra' ? saldo + m.monto : Math.max(0, saldo - m.monto);
+    batch.update(doc.ref, { saldoResultante: saldo });
+  });
+  batch.update(provRef, { saldo });
+  await batch.commit();
+}
+
 async function guardarEdicionMovimiento(){
   const nuevoMonto = Number(document.getElementById('edit-mov-monto').value);
   if(!nuevoMonto || nuevoMonto<=0){ alert('Ingresá un monto válido'); return; }
@@ -2275,29 +2300,31 @@ async function guardarEdicionMovimiento(){
   const { id: movId, tipo, esFactura } = movimientoEditando;
   const provRef = firestore.collection('proveedores').doc(proveedorSeleccionado);
   const movRef = provRef.collection('movimientos').doc(movId);
+  const nuevoIva = (tipo==='compra' && esFactura) ? calcularIVADiscriminado(nuevoMonto) : 0;
 
   try{
-    await firestore.runTransaction(async (tx)=>{
-      const movDoc = await tx.get(movRef);
-      if(!movDoc.exists) throw new Error('Este movimiento ya no existe (¿lo borraron desde otro dispositivo?)');
-      const provDoc = await tx.get(provRef);
-      if(!provDoc.exists) throw new Error('El proveedor ya no existe');
-
-      const montoViejo = movDoc.data().monto;
-      const saldoActual = provDoc.data().saldo || 0;
-      const efectoViejo = tipo==='compra' ? montoViejo : -montoViejo;
-      const efectoNuevo = tipo==='compra' ? nuevoMonto : -nuevoMonto;
-      const nuevoSaldo = Math.max(0, saldoActual - efectoViejo + efectoNuevo);
-      const nuevoIva = (tipo==='compra' && esFactura) ? calcularIVADiscriminado(nuevoMonto) : 0;
-
-      tx.update(provRef, { saldo: nuevoSaldo });
-      tx.update(movRef, { monto: nuevoMonto, comprobante: nuevoComprobante, iva: nuevoIva, saldoResultante: nuevoSaldo });
-    });
+    await movRef.update({ monto: nuevoMonto, comprobante: nuevoComprobante, iva: nuevoIva });
+    await recalcularSaldosProveedor(proveedorSeleccionado);
     cerrarModal('modal-editar-movimiento');
     verProveedor(proveedorSeleccionado);
     renderDashboard();
   }catch(err){
     alert('Error al editar el movimiento: ' + err.message);
+  }
+}
+
+// Botón manual para corregir cuentas que quedaron con saldos resultantes
+// desincronizados por el bug viejo (eliminar/editar no recalculaba en
+// cascada). Se puede usar en cualquier proveedor, en cualquier momento,
+// sin riesgo: solo reescribe saldoResultante, nunca cambia montos.
+async function recalcularYRefrescar(){
+  if(!proveedorSeleccionado) return;
+  try{
+    await recalcularSaldosProveedor(proveedorSeleccionado);
+    verProveedor(proveedorSeleccionado);
+    renderDashboard();
+  }catch(err){
+    alert('Error al recalcular: ' + err.message);
   }
 }
 
@@ -2307,20 +2334,8 @@ async function eliminarMovimiento(movId){
   const movRef = provRef.collection('movimientos').doc(movId);
 
   try{
-    await firestore.runTransaction(async (tx)=>{
-      const movDoc = await tx.get(movRef);
-      if(!movDoc.exists) return; // ya no existe — nada para revertir
-      const provDoc = await tx.get(provRef);
-      if(!provDoc.exists) throw new Error('El proveedor ya no existe');
-
-      const m = movDoc.data();
-      const saldoActual = provDoc.data().saldo || 0;
-      const efecto = m.tipo==='compra' ? m.monto : -m.monto;
-      const nuevoSaldo = Math.max(0, saldoActual - efecto);
-
-      tx.update(provRef, { saldo: nuevoSaldo });
-      tx.delete(movRef);
-    });
+    await movRef.delete();
+    await recalcularSaldosProveedor(proveedorSeleccionado);
     verProveedor(proveedorSeleccionado);
     renderDashboard();
   }catch(err){
