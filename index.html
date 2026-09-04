@@ -274,6 +274,7 @@
   .saldo-zero{color:var(--stock-ok);}
   .mov-tipo-compra{color:var(--stock-crit);font-weight:600;}
   .mov-tipo-pago{color:var(--stock-ok);font-weight:600;}
+  .mov-tipo-nota_credito{color:var(--sky);font-weight:600;}
   .prov-count{font-size:12px;color:var(--cement-dim);font-weight:500;}
 
   .empty-state{text-align:center;padding:40px 20px;color:var(--cement-dim);font-size:13.5px;}
@@ -772,6 +773,7 @@
       <select id="mov-tipo" onchange="toggleCampoComprobanteMov()">
         <option value="compra">Compra (aumenta saldo)</option>
         <option value="pago">Pago (disminuye saldo)</option>
+        <option value="nota_credito">Nota de crédito (disminuye saldo)</option>
       </select>
     </div>
     <div class="field" id="campo-mov-comprobante-tipo">
@@ -1978,7 +1980,7 @@ async function generarResumenContable(){
           'Fecha': new Date(m.fecha).toLocaleDateString('es-AR'),
           'Proveedor': pr.nombre,
           'CUIT': pr.cuit || '',
-          'Tipo': m.tipo==='compra' ? 'Compra' : 'Pago',
+          'Tipo': labelTipoMov(m.tipo),
           'Comprobante': m.comprobante || '',
           'Monto': m.tipo==='compra' ? m.monto : -m.monto,
           'Saldo resultante': m.saldoResultante
@@ -2132,6 +2134,16 @@ async function guardarProveedor(){
   }
 }
 
+// Etiqueta legible para cada tipo de movimiento de cuenta corriente de
+// proveedor. 'nota_credito' se comporta como un pago (resta del saldo)
+// pero se muestra distinto en la tabla e informes para que quede claro
+// que no fue una transferencia/efectivo real del lado de AppSur/cliente.
+function labelTipoMov(tipo){
+  if(tipo==='compra') return 'Compra';
+  if(tipo==='nota_credito') return 'Nota de crédito';
+  return 'Pago';
+}
+
 function renderProveedores(){
   const q = (document.getElementById('prov-search').value || '').toLowerCase().trim();
   let lista = db.proveedores;
@@ -2178,7 +2190,7 @@ async function verProveedor(id){
       return `
       <tr>
         <td class="mono">${new Date(m.fecha).toLocaleDateString('es-AR')}</td>
-        <td class="mov-tipo-${m.tipo}">${m.tipo==='compra'?'Compra':'Pago'}</td>
+        <td class="mov-tipo-${m.tipo}">${labelTipoMov(m.tipo)}</td>
         <td>${comprobanteTipo}</td>
         <td>${m.comprobante||'—'}</td>
         <td class="mono">${m.tipo==='compra'?'+':'-'}${money(m.monto)}</td>
@@ -2269,7 +2281,7 @@ function abrirEditarMovimiento(movId, tipo, monto, comprobante, esFactura){
   document.getElementById('edit-mov-monto').value = monto;
   document.getElementById('edit-mov-comprobante').value = comprobante;
   document.getElementById('edit-mov-info').textContent =
-    `${tipo==='compra' ? 'Compra' : 'Pago'}${tipo==='compra' ? (esFactura ? ' — Factura' : ' — Remito') : ''}`;
+    `${labelTipoMov(tipo)}${tipo==='compra' ? (esFactura ? ' — Factura' : ' — Remito') : ''}`;
   document.getElementById('modal-editar-movimiento').classList.add('active');
 }
 
